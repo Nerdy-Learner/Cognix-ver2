@@ -1,0 +1,89 @@
+# ==============================
+# GLOBAL
+# ==============================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+
+# ==============================
+# ENV FILES (IMPORTANT)
+# ==============================
+.env
+.env.*
+!.env.example
+
+# ==============================
+# PYTHON (BACKEND)
+# ==============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# virtual environment
+.venv/
+venv/
+env/
+
+# ==============================
+# MODEL FILES (OPTIONAL)
+# Uncomment if models are large
+# ==============================
+cognix-backend/models/*.pkl
+
+# ==============================
+# NODE / FRONTEND
+# ==============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite build output
+dist/
+
+# ==============================
+# FRONTEND CACHE
+# ==============================
+.vite/
+.cache/
+
+# ==============================
+# TESTING / COVERAGE
+# ==============================
+coverage/
+htmlcov/
+.pytest_cache/
+
+# ==============================
+# EDITOR SETTINGS
+# ==============================
+.vscode/
+.idea/
+
+# ==============================
+# OS FILES
+# ==============================
+*.sqlite3
+*.db
+
+# ==============================
+# SERVER TEMP FILES
+# ==============================
+*.pid
+*.seed
+
+# ==============================
+# OPTIONAL: DATA FILES
+# Uncomment if datasets large
+# ==============================
+# cognix-backend/data/*
