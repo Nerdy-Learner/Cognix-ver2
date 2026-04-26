@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { LoaderCircle } from "lucide-react";
 import TopNav from "../components/layout/TopNav";
 
-const API_BASE = "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
 
 function loadCashfreeScript() {
   return new Promise((resolve, reject) => {

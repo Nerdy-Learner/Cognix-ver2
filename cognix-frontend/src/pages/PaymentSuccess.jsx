@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 
-const API_BASE = "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
