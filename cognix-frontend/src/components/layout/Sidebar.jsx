@@ -38,12 +38,30 @@ const sections = [
 export default function Sidebar() {
   const location = useLocation();
 
-  const user = JSON.parse(localStorage.getItem("cognix_user"));
+  // const user = JSON.parse(localStorage.getItem("cognix_user"));
+  let user = null;
+
+  try {
+    const storedUser = localStorage.getItem("cognix_user");
+
+    if (storedUser && storedUser !== "undefined") {
+      user = JSON.parse(storedUser);
+    }
+  } catch (err) {
+    console.warn("Invalid cognix_user in localStorage");
+    localStorage.removeItem("cognix_user");
+  }
 
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     await logoutUser();
+
+    localStorage.removeItem("cognix_token");
+    localStorage.removeItem("cognix_user");
+    localStorage.removeItem("otpId");
+    localStorage.removeItem("userId");
+
     navigate("/login");
   };
 

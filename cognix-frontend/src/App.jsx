@@ -17,6 +17,8 @@ import Subscription from "./pages/Subscription";
 import PaymentCheckout from "./pages/PaymentCheckout";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import GoogleCallback from "./pages/auth/GoogleCallback";
+import GitHubCallback from "./pages/auth/GitHubCallback";
 
 function App() {
   return (
@@ -39,6 +41,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/auth/google/callback" element={<GoogleCallback />} />
+          <Route path="/auth/github/callback" element={<GitHubCallback />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/subscription" element={<Subscription />} />
           <Route path="/payment-checkout" element={<PaymentCheckout />} />

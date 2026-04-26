@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
+import { sendOtpMail } from "./utils/sendOtpMail.js";
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -1022,7 +1023,7 @@ app.post("/api/auth/signup", async (req, res) => {
 
 
 /* ---------------- USER LOGIN ---------------- */
-
+const otpStore = new Map();
 app.post("/api/auth/login", async (req, res) => {
 
     try {
@@ -1032,34 +1033,42 @@ app.post("/api/auth/login", async (req, res) => {
         const user = await User.findOne({ email });
 
         if (!user) {
-
             return res.json({
                 success: false,
                 isNewUser: true,
                 message: "User not found"
             });
-
         }
 
         const match = await bcrypt.compare(password, user.password);
 
         if (!match) {
-
             return res.json({
                 success: false,
                 message: "Invalid password"
             });
-
         }
 
-        user.lastLogin = new Date();
-        await user.save();
+        // ✅ Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        const otpId = crypto.randomBytes(12).toString("hex");
+
+        otpStore.set(otpId, {
+            otp,
+            userId: user._id.toString(),
+            expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes
+        });
+
+        // ✅ Send OTP email
+        await sendOtpMail(user.email, otp);
 
         res.json({
             success: true,
-            isNewUser: false,
-            message: "Login successful",
-            user
+            requiresTwoFactor: true,
+            otpId,
+            userId: user._id,
+            message: "OTP sent to your email"
         });
 
     } catch (err) {
@@ -1069,6 +1078,72 @@ app.post("/api/auth/login", async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Login failed"
+        });
+
+    }
+
+});
+
+app.post("/api/auth/verify-otp", async (req, res) => {
+
+    try {
+
+        const { otpId, code, userId } = req.body;
+
+        const record = otpStore.get(otpId);
+
+        if (!record) {
+            return res.json({
+                success: false,
+                message: "OTP expired or invalid"
+            });
+        }
+
+        if (record.userId !== userId) {
+            return res.json({
+                success: false,
+                message: "Invalid OTP session"
+            });
+        }
+
+        if (Date.now() > record.expiresAt) {
+            otpStore.delete(otpId);
+
+            return res.json({
+                success: false,
+                message: "OTP expired"
+            });
+        }
+
+        if (record.otp !== code) {
+            return res.json({
+                success: false,
+                message: "Incorrect OTP"
+            });
+        }
+
+        otpStore.delete(otpId);
+
+        const user = await User.findById(userId);
+
+        user.lastLogin = new Date();
+        await user.save();
+
+        const token = crypto.randomBytes(24).toString("hex");
+
+        res.json({
+            success: true,
+            token,
+            user
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            success: false,
+            message: "OTP verification failed"
         });
 
     }
@@ -1196,16 +1271,24 @@ app.get("/api/payment/order-status", async (req, res) => {
 
 /* ---------------- GOOGLE LOGIN ENDPOINT ---------------- */
 
+// import crypto from "crypto";
+// import sendOtpMail from "./utils/sendOtpMail.js"; // adjust path if needed
+
 app.post("/api/auth/google", async (req, res) => {
+
     const { code } = req.body;
 
     try {
+
+        // Exchange code for access token
         const tokenRes = await fetch(
             "https://oauth2.googleapis.com/token",
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
                     code,
                     client_id: process.env.GOOGLE_CLIENT_ID,
                     client_secret: process.env.GOOGLE_CLIENT_SECRET,
@@ -1217,6 +1300,12 @@ app.post("/api/auth/google", async (req, res) => {
 
         const tokenData = await tokenRes.json();
 
+        if (!tokenData.access_token) {
+            console.error("Google token error:", tokenData);
+            return res.status(400).json({ success: false });
+        }
+
+        // Fetch Google profile
         const userRes = await fetch(
             "https://www.googleapis.com/oauth2/v2/userinfo",
             {
@@ -1228,24 +1317,58 @@ app.post("/api/auth/google", async (req, res) => {
 
         const profile = await userRes.json();
 
+        // Find or create user
         let user = await User.findOne({ email: profile.email });
 
         if (!user) {
             user = await User.create({
                 name: profile.name,
                 email: profile.email,
-                password: "oauth-user",
+                password: crypto.randomBytes(16).toString("hex"),
             });
         }
 
-        res.json({ success: true, user });
+        // Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        const otpId = crypto.randomBytes(12).toString("hex");
+
+        otpStore.set(otpId, {
+            otp,
+            userId: user._id.toString(),
+            expiresAt: Date.now() + 5 * 60 * 1000,
+        });
+
+        // Send OTP email
+        await sendOtpMail(user.email, otp);
+
+        // Mask email for UI display
+        const maskedEmail =
+            user.email.slice(0, 2) +
+            "***@" +
+            user.email.split("@")[1];
+
+        // Send OTP response
+        res.json({
+            success: true,
+            requiresTwoFactor: true,
+            data: {
+                otpId,
+                userId: user._id,
+                maskedEmail,
+            },
+        });
 
     } catch (err) {
-        res.status(500).json({ success: false });
+
+        console.error("Google OAuth error:", err);
+
+        res.status(500).json({
+            success: false,
+        });
+
     }
 });
-
-
 
 /* ---------------- GITHUB LOGIN ENDPOINT ---------------- */
 
@@ -1289,7 +1412,13 @@ app.post("/api/auth/github", async (req, res) => {
             });
         }
 
-        res.json({ success: true, user });
+        const token = crypto.randomBytes(24).toString("hex");
+
+        res.json({
+            success: true,
+            token,
+            user
+        });
 
     } catch (err) {
         res.status(500).json({ success: false });

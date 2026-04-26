@@ -49,11 +49,20 @@ const itemVariants = {
 };
 
 function Login() {
+    const navigate = useNavigate();
     useEffect(() => {
         const token = localStorage.getItem("cognix_token");
         if (token) navigate("/app");
     }, []);
-    const navigate = useNavigate();
+    useEffect(() => {
+        const otpId = localStorage.getItem("otpId");
+        const userId = localStorage.getItem("userId");
+
+        if (otpId && userId) {
+            setOtpData({ otpId, userId });
+            setShowVerification(true);
+        }
+    }, []);
 
     // ── state ──────────────────────────────────────────────
     const [email, setEmail] = useState("");

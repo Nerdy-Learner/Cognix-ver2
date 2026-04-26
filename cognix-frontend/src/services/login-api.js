@@ -70,9 +70,8 @@ const generateToken = (user) => {
 
 export async function loginUser({ email, password }) {
     try {
-        // Try real backend first
         const res = await fetch(
-            "http://localhost:3001/api/auth/login",
+            `${import.meta.env.VITE_API_BASE_URL}/auth/login`,
             {
                 method: "POST",
                 headers: {
@@ -82,21 +81,32 @@ export async function loginUser({ email, password }) {
             }
         );
 
-        if (res.ok) {
-            const data = await res.json();
+        const data = await res.json();
 
+        if (!res.ok || !data.success) {
             return {
-                success: true,
-                status: 200,
-                data: {
-                    message: "Credentials verified. OTP sent.",
-                    otpId: "otp_" + Date.now().toString(36),
-                    userId: data.user?.id || "usr_backend",
-                    maskedEmail: maskEmail(email),
-                    requiresTwoFactor: true,
-                },
+                success: false,
+                status: res.status,
+                error: {
+                    message:
+                        data.message ||
+                        "Invalid username/email or password"
+                }
             };
         }
+
+        // Save login session
+        localStorage.setItem("cognix_token", data.token || "");
+        localStorage.setItem(
+            "cognix_user",
+            JSON.stringify(data.user)
+        );
+
+        return {
+            success: true,
+            status: 200,
+            data
+        };
 
     } catch (err) {
         console.warn("Backend unavailable. Falling back to mock login.");
@@ -116,28 +126,17 @@ export async function loginUser({ email, password }) {
             success: false,
             status: 401,
             error: {
-                code: "INVALID_CREDENTIALS",
-                message: "Invalid username/email or password",
-            },
+                message: "Invalid username/email or password"
+            }
         };
     }
-
-    const otpId = "otp_" + Date.now().toString(36);
-
-    console.log(
-        `[Demo API] OTP sent to ${user.email}. Use 000000 or 123456 to verify.`
-    );
 
     return {
         success: true,
         status: 200,
         data: {
-            message: "Credentials verified. OTP sent.",
-            otpId,
-            userId: user.id,
-            maskedEmail: maskEmail(user.email),
-            requiresTwoFactor: true,
-        },
+            user
+        }
     };
 }
 
@@ -184,49 +183,131 @@ export async function loginUser({ email, password }) {
  * Verify 2FA OTP code
  */
 export async function verifyOTP({ otpId, code, userId }) {
-    await delay(800);
 
-    if (!VALID_OTPS.includes(code)) {
-        return {
-            success: false,
-            status: 400,
-            error: {
-                code: "INVALID_OTP",
-                message: "Invalid verification code. Try 000000 or 123456.",
-            },
-        };
+    let backendReachable = true;
+
+    try {
+        // Step 1: Try real backend OTP verification first
+        const res = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL}/auth/verify-otp`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ otpId, code, userId })
+            }
+        );
+
+        if (res.ok) {
+            const data = await res.json();
+
+            localStorage.setItem("cognix_token", data.token);
+            localStorage.setItem(
+                "cognix_user",
+                JSON.stringify(data.user)
+            );
+
+            return {
+                success: true,
+                status: 200,
+                data
+            };
+        }
+
+    } catch (err) {
+        backendReachable = false;
+        console.warn("Backend OTP verification unavailable.");
     }
 
-    const user = MOCK_USERS.find((u) => u.id === userId);
-    const token = generateToken(user || MOCK_USERS[0]);
 
-    // Store token in localStorage (demo)
-    localStorage.setItem("cognix_token", token);
-    localStorage.setItem(
-        "cognix_user",
-        JSON.stringify({
-            id: user?.id,
-            name: user?.name,
-            email: user?.email,
-            role: user?.role,
-        })
-    );
+    // Step 2: fallback to demo OTP (only if backend unreachable)
 
-    return {
-        success: true,
-        status: 200,
-        data: {
-            message: "Authentication successful",
-            token,
-            user: {
+    if (
+        !backendReachable &&
+        import.meta.env.VITE_ALLOW_DEV_OTP === "true" &&
+        ["000000", "123456"].includes(code)
+    ) {
+
+        const user = MOCK_USERS.find((u) => u.id === userId);
+        const token = generateToken(user || MOCK_USERS[0]);
+
+        localStorage.setItem("cognix_token", token);
+        localStorage.setItem(
+            "cognix_user",
+            JSON.stringify({
                 id: user?.id,
                 name: user?.name,
                 email: user?.email,
-                role: user?.role,
-            },
-        },
+                role: user?.role
+            })
+        );
+
+        return {
+            success: true,
+            status: 200,
+            data: {
+                message: "Authentication successful (demo OTP)",
+                token
+            }
+        };
+    }
+
+    // Step 3: reject invalid OTP
+
+    return {
+        success: false,
+        status: 400,
+        error: {
+            code: "INVALID_OTP",
+            message: "Invalid verification code."
+        }
     };
 }
+// export async function verifyOTP({ otpId, code, userId }) {
+//     await delay(800);
+
+//     if (!VALID_OTPS.includes(code)) {
+//         return {
+//             success: false,
+//             status: 400,
+//             error: {
+//                 code: "INVALID_OTP",
+//                 message: "Invalid verification code. Try 000000 or 123456.",
+//             },
+//         };
+//     }
+
+//     const user = MOCK_USERS.find((u) => u.id === userId);
+//     const token = generateToken(user || MOCK_USERS[0]);
+
+//     // Store token in localStorage (demo)
+//     localStorage.setItem("cognix_token", token);
+//     localStorage.setItem(
+//         "cognix_user",
+//         JSON.stringify({
+//             id: user?.id,
+//             name: user?.name,
+//             email: user?.email,
+//             role: user?.role,
+//         })
+//     );
+
+//     return {
+//         success: true,
+//         status: 200,
+//         data: {
+//             message: "Authentication successful",
+//             token,
+//             user: {
+//                 id: user?.id,
+//                 name: user?.name,
+//                 email: user?.email,
+//                 role: user?.role,
+//             },
+//         },
+//     };
+// }
 
 /**
  * POST /api/auth/resend-otp
@@ -411,7 +492,7 @@ export async function logoutUser() {
 export const signupUser = async (data) => {
 
     const res = await fetch(
-        "http://localhost:3001/api/auth/signup",
+        `${import.meta.env.VITE_API_BASE_URL}/auth/signup`,
         {
             method: "POST",
             headers: {
