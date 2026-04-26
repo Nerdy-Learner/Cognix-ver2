@@ -1375,7 +1375,54 @@ app.get("/api/auth/github", (req, res) => {
     res.redirect(redirectUrl);
 });
 
+app.get("/api/auth/github/callback", async (req, res) => {
+    const code = req.query.code;
 
+    try {
+        const tokenRes = await fetch(
+            "https://github.com/login/oauth/access_token",
+            {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    client_id: process.env.GITHUB_CLIENT_ID,
+                    client_secret: process.env.GITHUB_CLIENT_SECRET,
+                    code,
+                }),
+            }
+        );
+
+        const tokenData = await tokenRes.json();
+
+        const userRes = await fetch(
+            "https://api.github.com/user",
+            {
+                headers: {
+                    Authorization: `Bearer ${tokenData.access_token}`,
+                },
+            }
+        );
+
+        const profile = await userRes.json();
+
+        let user = await User.findOne({ email: profile.email });
+
+        if (!user) {
+            user = await User.create({
+                name: profile.login,
+                email: profile.email,
+                password: "oauth-user",
+            });
+        }
+
+        res.redirect(`${process.env.FRONTEND_URL}/app`);
+    } catch (err) {
+        res.redirect(`${process.env.FRONTEND_URL}/login`);
+    }
+});
 
 /* ---------------- SERVER START ---------------- */
 
