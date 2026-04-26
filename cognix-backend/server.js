@@ -47,8 +47,12 @@ const cashfreeAppId = process.env.CASHFREE_APP_ID || "";
 const cashfreeSecretKey = process.env.CASHFREE_SECRET_KEY || "";
 const paymentDemoMode = process.env.DEMO_MODE !== "false";
 
-app.use(cors());
-app.use(express.json());
+app.use(
+    cors({
+        origin: frontendUrl,
+        credentials: true,
+    })
+); app.use(express.json());
 
 /* ---------------- DATABASE CONNECTION ---------------- */
 
@@ -1245,7 +1249,53 @@ app.post("/api/auth/google", async (req, res) => {
     }
 });
 
+app.get("/api/auth/google/callback", async (req, res) => {
+    const code = req.query.code;
 
+    try {
+        const tokenRes = await fetch(
+            "https://oauth2.googleapis.com/token",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    code,
+                    client_id: process.env.GOOGLE_CLIENT_ID,
+                    client_secret: process.env.GOOGLE_CLIENT_SECRET,
+                    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+                    grant_type: "authorization_code",
+                }),
+            }
+        );
+
+        const tokenData = await tokenRes.json();
+
+        const userRes = await fetch(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            {
+                headers: {
+                    Authorization: `Bearer ${tokenData.access_token}`,
+                },
+            }
+        );
+
+        const profile = await userRes.json();
+
+        let user = await User.findOne({ email: profile.email });
+
+        if (!user) {
+            user = await User.create({
+                name: profile.name,
+                email: profile.email,
+                password: "oauth-user",
+            });
+        }
+
+        res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+    } catch (err) {
+        res.redirect(`${process.env.FRONTEND_URL}/login`);
+    }
+});
 
 /* ---------------- GITHUB LOGIN ENDPOINT ---------------- */
 
