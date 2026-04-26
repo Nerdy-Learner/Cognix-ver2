@@ -72,7 +72,7 @@ export async function loginUser({ email, password }) {
     try {
         // Try real backend first
         const res = await fetch(
-            "http://localhost:3001/api/auth/login",
+            `${import.meta.env.VITE_API_BASE_URL}/auth/login`,
             {
                 method: "POST",
                 headers: {
@@ -411,7 +411,7 @@ export async function logoutUser() {
 export const signupUser = async (data) => {
 
     const res = await fetch(
-        "http://localhost:3001/api/auth/signup",
+        `${import.meta.env.VITE_API_BASE_URL}/auth/signup`,
         {
             method: "POST",
             headers: {
