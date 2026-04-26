@@ -318,7 +318,7 @@ export default function SystemStatus() {
         }}>
           {[
             { icon: Cpu, label: 'RUNTIME', value: 'Python 3.11', color: '#A78BFA' },
-            { icon: Wifi, label: 'API ENDPOINT', value: 'localhost:3001', color: '#0062FF' },
+            { icon: Wifi, label: 'API ENDPOINT', value: import.meta.env.VITE_API_BASE_URL?.replace("/api", ""), color: '#0062FF' },
             { icon: Zap, label: 'FRAMEWORK', value: 'FastAPI', color: '#FF9F0A' },
             { icon: CheckCircle, label: 'ENVIRONMENT', value: 'Development', color: '#30D158' },
           ].map(item => (

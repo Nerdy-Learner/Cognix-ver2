@@ -3,6 +3,8 @@ import { Filter, Search } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
 import { getRisk, getRiskStyles } from "../utils/risk";
+import { getFullIncidents } from "../services/api";
+
 
 const severityOrder = { High: 0, Medium: 1, Low: 2 };
 
@@ -15,9 +17,10 @@ export default function Alerts() {
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        const response = await fetch("http://localhost:3001/api/incidents/full");
-        const data = await response.json();
-        if (response.ok) setAlerts(data);
+        const response = await getFullIncidents();
+        const data = response.data;
+        // if (response.ok) 
+        setAlerts(data);
       } catch (error) {
         console.error("Failed to load alerts:", error);
       } finally {
@@ -47,10 +50,11 @@ export default function Alerts() {
         const matchesRisk =
           riskFilter === "All" || alert.risk === riskFilter;
 
-        const isEscalated =
-          alert.agent4?.decision === "Escalate";
+        // const isEscalated =
+        //   alert.agent4?.decision === "Escalate";
 
-        return matchesSearch && matchesRisk && isEscalated;
+        // return matchesSearch && matchesRisk && isEscalated;
+        return matchesSearch && matchesRisk;
       })
       .sort((a, b) => severityOrder[a.risk] - severityOrder[b.risk]);
 

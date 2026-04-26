@@ -3,6 +3,8 @@ import { Download, FileText, Filter } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
+import { getFullIncidents } from "../services/api";
+import { getReports } from "../services/api";
 
 // const [weeklyIncidents, setWeeklyIncidents] = useState(0);
 // const [autoSummaries, setAutoSummaries] = useState(0);
@@ -39,8 +41,8 @@ export default function Reports() {
   useEffect(() => {
     const fetchReportStats = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/incidents/full");
-        const data = await res.json();
+        const res = await getFullIncidents();
+        const data = res.data;
 
         const labelCounts = {};
 
@@ -148,9 +150,9 @@ export default function Reports() {
         );
 
         //REPORTS
-        const reportsRes = await fetch("http://localhost:3001/api/reports");
-        const reportsData = await reportsRes.json();
 
+        const reportsRes = await getReports();
+        setReports(reportsRes.data);
         setReports(reportsData);
 
       } catch (err) {
@@ -295,7 +297,7 @@ export default function Reports() {
                   </div>
                 </div>
                 <a
-                  href={`http://localhost:3001${report.endpoint}`}
+                  href={`${import.meta.env.VITE_API_BASE_URL.replace("/api", "")}${report.endpoint}`}
                   className="btn-ghost"
                 >
                   <Download size={14} />Download

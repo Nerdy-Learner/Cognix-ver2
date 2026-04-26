@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Upload } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
+import { getFullIncidents } from "../services/api";
 
 // const incidents = [
 //   { id: "INC-447", type: "Brute force burst", risk: "High", ip: "185.220.101.47", status: "Investigating" },
@@ -72,11 +73,9 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
       try {
 
-        const res = await fetch(
-          "http://localhost:5000/api/incidents/full"
-        );
+        const res = await getFullIncidents();
 
-        const data = await res.json();
+        const data = res.data;
 
         const formatted = data.slice(0, 6).map((incident, index) => ({
           id: incident._id.slice(-6).toUpperCase(),

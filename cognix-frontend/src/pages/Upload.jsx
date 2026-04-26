@@ -3,6 +3,7 @@ import { motion as Motion } from "framer-motion";
 import { FileText, ShieldCheck, UploadCloud } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
+import { uploadIncidents } from "../services/api";
 
 export default function Upload() {
   const [isDragging, setIsDragging] = useState(false);
@@ -40,16 +41,12 @@ export default function Upload() {
       }, 100);
 
       try {
-        const response = await fetch("http://localhost:3001/api/incidents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ data }),
-        });
+        const response = await uploadIncidents({ data });
 
         clearInterval(interval);
         setProgress(100);
 
-        if (response.ok) {
+        if (response.status === 200) {
           setStatus("Upload successful. Agent pipeline started.");
         } else {
           setStatus("Upload failed");

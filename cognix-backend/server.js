@@ -1,46 +1,3 @@
-// import express from "express";
-// import mongoose from "mongoose";
-// import cors from "cors";
-
-// const app = express();
-// app.use(cors());
-// app.use(express.json());
-
-// // Connect to MongoDB
-// mongoose.connect("mongodb://127.0.0.1:27017/cognix")
-//     .then(() => console.log("MongoDB connected"))
-//     .catch((err) => console.log(err));
-
-// // Incident schema (store CSV rows)
-// const incidentSchema = new mongoose.Schema({}, { strict: false });
-// const Incident = mongoose.model("Incident", incidentSchema);
-
-// // API endpoint to save CSV
-// app.post("/api/incidents", async (req, res) => {
-//     try {
-//         const { data } = req.body;
-//         const inserted = await Incident.insertMany(data);
-//         res.json({ message: "Data saved successfully", count: inserted.length });
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({ message: "Server error" });
-//     }
-// });
-
-// // GET all incidents
-// app.get("/api/incidents", async (req, res) => {
-//     try {
-//         const incidents = await Incident.find(); // get all rows
-//         res.json(incidents);
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({ message: "Server error" });
-//     }
-// });
-
-// app.listen(5000, () => console.log("Server running on http://localhost:5000"));
-
-
 import { PythonShell } from "python-shell";
 import express from "express";
 import mongoose from "mongoose";
@@ -1234,6 +1191,110 @@ app.get("/api/payment/order-status", async (req, res) => {
     }
 });
 
+
+
+
+/* ---------------- GOOGLE LOGIN ENDPOINT ---------------- */
+
+app.post("/api/auth/google", async (req, res) => {
+    const { code } = req.body;
+
+    try {
+        const tokenRes = await fetch(
+            "https://oauth2.googleapis.com/token",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    code,
+                    client_id: process.env.GOOGLE_CLIENT_ID,
+                    client_secret: process.env.GOOGLE_CLIENT_SECRET,
+                    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+                    grant_type: "authorization_code",
+                }),
+            }
+        );
+
+        const tokenData = await tokenRes.json();
+
+        const userRes = await fetch(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            {
+                headers: {
+                    Authorization: `Bearer ${tokenData.access_token}`,
+                },
+            }
+        );
+
+        const profile = await userRes.json();
+
+        let user = await User.findOne({ email: profile.email });
+
+        if (!user) {
+            user = await User.create({
+                name: profile.name,
+                email: profile.email,
+                password: "oauth-user",
+            });
+        }
+
+        res.json({ success: true, user });
+
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
+});
+
+
+
+/* ---------------- GITHUB LOGIN ENDPOINT ---------------- */
+
+app.post("/api/auth/github", async (req, res) => {
+    const { code } = req.body;
+
+    try {
+        const tokenRes = await fetch(
+            "https://github.com/login/oauth/access_token",
+            {
+                method: "POST",
+                headers: { Accept: "application/json" },
+                body: JSON.stringify({
+                    client_id: process.env.GITHUB_CLIENT_ID,
+                    client_secret: process.env.GITHUB_CLIENT_SECRET,
+                    code,
+                }),
+            }
+        );
+
+        const tokenData = await tokenRes.json();
+
+        const userRes = await fetch(
+            "https://api.github.com/user",
+            {
+                headers: {
+                    Authorization: `Bearer ${tokenData.access_token}`,
+                },
+            }
+        );
+
+        const profile = await userRes.json();
+
+        let user = await User.findOne({ email: profile.email });
+
+        if (!user) {
+            user = await User.create({
+                name: profile.login,
+                email: profile.email,
+                password: "oauth-user",
+            });
+        }
+
+        res.json({ success: true, user });
+
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
+});
 
 
 

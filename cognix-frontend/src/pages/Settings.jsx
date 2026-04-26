@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Bell, Globe, Settings as SettingsIcon, Shield, User } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
+import { resetEnvironment } from "../services/api";
 
 function Toggle({ label, active, onClick }) {
   return (
@@ -21,6 +22,27 @@ export default function Settings() {
   const [notifyReports, setNotifyReports] = useState(false);
   const [autoTriage, setAutoTriage] = useState(true);
   const [mfa, setMfa] = useState(true);
+
+
+  const handleDeleteEnvironment = async () => {
+    const confirmDelete = window.confirm(
+      "This will permanently delete all uploaded incidents and agent outputs. Continue?"
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await resetEnvironment();
+
+      alert("Environment reset successful");
+
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert("Environment reset failed");
+    }
+  };
+
 
   return (
     <Layout>
@@ -115,7 +137,12 @@ export default function Settings() {
               <p style={{ color: "var(--t2)", lineHeight: 1.75, marginBottom: 16 }}>
                 Permanently delete incident data and connected settings for this environment.
               </p>
-              <button type="button" className="btn-ghost" style={{ borderColor: "rgba(255,101,101,.28)", color: "var(--red)" }}>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ borderColor: "rgba(255,101,101,.28)", color: "var(--red)" }}
+                onClick={handleDeleteEnvironment}
+              >
                 Delete environment
               </button>
             </Surface>

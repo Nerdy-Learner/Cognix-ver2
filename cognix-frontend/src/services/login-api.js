@@ -436,7 +436,7 @@ export const signupUser = async (data) => {
  * NOTE: In production, replace GOOGLE_CLIENT_ID with your actual
  * Google Cloud Console OAuth 2.0 Client ID and set up the redirect URI.
  */
-const GOOGLE_CLIENT_ID = "DEMO_CLIENT_ID"; // Replace with real Client ID
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; // Replace with real Client ID
 
 export function initiateGoogleSignIn() {
     // Google OAuth 2.0 authorization endpoint
@@ -476,7 +476,7 @@ export function initiateGoogleSignIn() {
  * NOTE: In production, replace GITHUB_CLIENT_ID with your actual
  * GitHub OAuth App Client ID from https://github.com/settings/developers
  */
-const GITHUB_CLIENT_ID = "DEMO_GITHUB_CLIENT_ID"; // Replace with real Client ID
+const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID; // Replace with real Client ID
 
 export function initiateGitHubSignIn() {
     const githubAuthURL = new URL("https://github.com/login/oauth/authorize");

@@ -3,6 +3,7 @@ import { Filter, Search } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
 import { getRisk, getRiskStyles } from "../utils/risk";
+import { getFullIncidents } from "../services/api";
 
 const severityOrder = { High: 0, Medium: 1, Low: 2 };
 
@@ -16,11 +17,13 @@ export default function Incidents() {
   useEffect(() => {
     const fetchIncidents = async () => {
       try {
-        const response = await fetch("http://localhost:3001/api/incidents/full");
-        const data = await response.json();
-        if (response.ok) {
-          setIncidents(data);
-          if (data[0]?._id) setSelectedIncidentId(data[0]._id);
+        const response = await getFullIncidents();
+        const data = response.data;
+
+        setIncidents(data);
+
+        if (data[0]?._id) {
+          setSelectedIncidentId(data[0]._id);
         }
       } catch (error) {
         console.error("Failed to load incidents:", error);

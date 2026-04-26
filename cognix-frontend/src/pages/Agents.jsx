@@ -2,6 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { FileText } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
+import { getFullIncidents } from "../services/api";
+import { getThroughput } from "../services/api";
+import { getAgent1Outputs } from "../services/api";
+import { getRuntimeLogs } from "../services/api";
+import { getStageThroughput } from "../services/api";
+import { getStageLatency } from "../services/api";
+import { getDatasetByStage } from "../services/api";
+
 
 const agents = [
   { label: "Raw logs", stage: "01", name: "Data ingestion", desc: "Normalizes raw telemetry into structured payloads.", acc: null, thru: "12k eps", lat: "<1ms", key: "incidents" },
@@ -78,8 +86,8 @@ export default function Agents() {
   useEffect(() => {
     const fetchEscalations = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/incidents/full");
-        const data = await res.json();
+        const res = await getFullIncidents();
+        const data = res.data;
 
         const count = data.filter(
           (incident) => incident.agent4?.decision === "Escalate"
@@ -98,9 +106,8 @@ export default function Agents() {
   useEffect(() => {
     const fetchThroughput = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/throughput");
-        const data = await res.json();
-        setThroughputEPS(Math.round(data.eps));
+        const res = await getThroughput();
+        setThroughputEPS(Math.round(res.data.eps));
       } catch (err) {
         console.error(err);
       }
@@ -116,9 +123,8 @@ export default function Agents() {
   useEffect(() => {
     const fetchClassified = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/agent1");
-        const data = await res.json();
-        setClassifiedCount(data.length);
+        const res = await getAgent1Outputs();
+        setClassifiedCount(res.data.length);
       } catch (err) {
         console.error("Failed to fetch classified count:", err);
       }
@@ -130,11 +136,10 @@ export default function Agents() {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/runtime-log");
-        const data = await res.json();
+        const res = await getRuntimeLogs();
 
         setLogLines(
-          data.map((entry, index) => ({
+          res.data.map((entry, index) => ({
             text: entry.text,
             index
           }))
@@ -153,21 +158,20 @@ export default function Agents() {
   }, []);
 
   useEffect(() => {
-    loadDataset(agents[0]);
-  }, []);
-
-  useEffect(() => {
     if (!activeAgent?.key || activeAgent.key === "incidents") return;
 
-    const interval = setInterval(() => {
-      fetch(`http://localhost:3001/api/stage-throughput/${activeAgent.key}`)
-        .then(res => res.json())
-        .then(data => setStageEPS(Math.round(data.eps)))
-        .catch(() => { });
-    }, 3000);
+    const fetchStage = async () => {
+      try {
+        const res = await getStageThroughput(activeAgent.key);
+        setStageEPS(Math.round(res.data.eps));
+      } catch (err) {
+        console.error(err);
+      }
+    };
 
-    return () => clearInterval(interval);
+    fetchStage();
   }, [activeAgent]);
+
 
   const loadDataset = async (agent) => {
     setActiveAgent(agent);
@@ -181,13 +185,9 @@ export default function Agents() {
           return;
         }
 
-        const res = await fetch(
-          `http://localhost:3001/api/stage-latency/${stageKey}`
-        );
+        const res = await getStageLatency(stageKey);
+        setStageLatency(`${res.data.latency} ms`);
 
-        const data = await res.json();
-
-        setStageLatency(`${data.latency} ms`);
 
       } catch (err) {
         console.error("Latency error:", err);
@@ -204,13 +204,8 @@ export default function Agents() {
           return;
         }
 
-        const res = await fetch(
-          `http://localhost:3001/api/stage-throughput/${stageKey}`
-        );
-
-        const data = await res.json();
-
-        setStageEPS(Math.round(data.eps));
+        const res = await getStageThroughput(stageKey);
+        setStageEPS(Math.round(res.data.eps));
 
       } catch (err) {
         console.error("Stage throughput error:", err);
@@ -222,25 +217,25 @@ export default function Agents() {
     fetchStageEPS(agent.key);
 
     try {
-      let endpoint = "";
+      // let endpoint = "";
 
-      if (agent.key === "incidents")
-        endpoint = "http://localhost:3001/api/incidents";
+      // if (agent.key === "incidents")
+      //   endpoint = "http://localhost:3001/api/incidents";
 
-      if (agent.key === "agent_1_output")
-        endpoint = "http://localhost:3001/api/agent1";
+      // if (agent.key === "agent_1_output")
+      //   endpoint = "http://localhost:3001/api/agent1";
 
-      if (agent.key === "agent_2_output")
-        endpoint = "http://localhost:3001/api/agent2";
+      // if (agent.key === "agent_2_output")
+      //   endpoint = "http://localhost:3001/api/agent2";
 
-      if (agent.key === "agent_3_output")
-        endpoint = "http://localhost:3001/api/agent3";
+      // if (agent.key === "agent_3_output")
+      //   endpoint = "http://localhost:3001/api/agent3";
 
-      if (agent.key === "agent_4_output")
-        endpoint = "http://localhost:3001/api/agent4";
+      // if (agent.key === "agent_4_output")
+      //   endpoint = "http://localhost:3001/api/agent4";
 
-      const response = await fetch(endpoint);
-      const data = await response.json();
+      const response = await getDatasetByStage(agent.key);
+      const data = response.data;
 
       if (!data.length) {
         setDataset(null);
