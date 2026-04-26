@@ -1249,6 +1249,24 @@ app.post("/api/auth/google", async (req, res) => {
     }
 });
 
+app.get("/api/auth/google", (req, res) => {
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+
+    const googleAuthUrl =
+        "https://accounts.google.com/o/oauth2/v2/auth" +
+        `?client_id=${clientId}` +
+        `&redirect_uri=${redirectUri}` +
+        "&response_type=code" +
+        "&scope=profile email" +
+        "&access_type=offline" +
+        "&prompt=consent";
+
+    res.redirect(googleAuthUrl);
+
+});
+
 app.get("/api/auth/google/callback", async (req, res) => {
     const code = req.query.code;
 
@@ -1291,7 +1309,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
             });
         }
 
-        res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+        res.redirect(`${process.env.FRONTEND_URL}/app`);
     } catch (err) {
         res.redirect(`${process.env.FRONTEND_URL}/login`);
     }
