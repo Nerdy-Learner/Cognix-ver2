@@ -438,33 +438,36 @@ export const signupUser = async (data) => {
  */
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; // Replace with real Client ID
 
+// export function initiateGoogleSignIn() {
+//     // Google OAuth 2.0 authorization endpoint
+//     const googleAuthURL = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+
+//     googleAuthURL.searchParams.set("client_id", GOOGLE_CLIENT_ID);
+//     googleAuthURL.searchParams.set("redirect_uri", window.location.origin + "/auth/google/callback");
+//     googleAuthURL.searchParams.set("response_type", "code");
+//     googleAuthURL.searchParams.set("scope", "openid email profile");
+//     googleAuthURL.searchParams.set("access_type", "offline");
+//     googleAuthURL.searchParams.set("prompt", "consent");
+//     googleAuthURL.searchParams.set("state", crypto.randomUUID?.() || Date.now().toString(36));
+
+//     // Open in a centered popup
+//     const width = 500;
+//     const height = 650;
+//     const left = window.screenX + (window.outerWidth - width) / 2;
+//     const top = window.screenY + (window.outerHeight - height) / 2;
+
+//     const popup = window.open(
+//         googleAuthURL.toString(),
+//         "google-signin",
+//         `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no`
+//     );
+
+//     return popup;
+// }
 export function initiateGoogleSignIn() {
-    // Google OAuth 2.0 authorization endpoint
-    const googleAuthURL = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-
-    googleAuthURL.searchParams.set("client_id", GOOGLE_CLIENT_ID);
-    googleAuthURL.searchParams.set("redirect_uri", window.location.origin + "/auth/google/callback");
-    googleAuthURL.searchParams.set("response_type", "code");
-    googleAuthURL.searchParams.set("scope", "openid email profile");
-    googleAuthURL.searchParams.set("access_type", "offline");
-    googleAuthURL.searchParams.set("prompt", "consent");
-    googleAuthURL.searchParams.set("state", crypto.randomUUID?.() || Date.now().toString(36));
-
-    // Open in a centered popup
-    const width = 500;
-    const height = 650;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    const popup = window.open(
-        googleAuthURL.toString(),
-        "google-signin",
-        `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no`
-    );
-
-    return popup;
+    window.location.href =
+        "https://cognix-backend-nukk.onrender.com/api/auth/google";
 }
-
 // ═══════════════════════════════════════════════════════════════
 // GITHUB OAUTH
 // ═══════════════════════════════════════════════════════════════
@@ -478,29 +481,32 @@ export function initiateGoogleSignIn() {
  */
 const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID; // Replace with real Client ID
 
+// export function initiateGitHubSignIn() {
+//     const githubAuthURL = new URL("https://github.com/login/oauth/authorize");
+
+//     githubAuthURL.searchParams.set("client_id", GITHUB_CLIENT_ID);
+//     githubAuthURL.searchParams.set("redirect_uri", window.location.origin + "/auth/github/callback");
+//     githubAuthURL.searchParams.set("scope", "read:user user:email");
+//     githubAuthURL.searchParams.set("state", crypto.randomUUID?.() || Date.now().toString(36));
+
+//     // Open in a centered popup
+//     const width = 500;
+//     const height = 700;
+//     const left = window.screenX + (window.outerWidth - width) / 2;
+//     const top = window.screenY + (window.outerHeight - height) / 2;
+
+//     const popup = window.open(
+//         githubAuthURL.toString(),
+//         "github-signin",
+//         `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no`
+//     );
+
+//     return popup;
+// }
 export function initiateGitHubSignIn() {
-    const githubAuthURL = new URL("https://github.com/login/oauth/authorize");
-
-    githubAuthURL.searchParams.set("client_id", GITHUB_CLIENT_ID);
-    githubAuthURL.searchParams.set("redirect_uri", window.location.origin + "/auth/github/callback");
-    githubAuthURL.searchParams.set("scope", "read:user user:email");
-    githubAuthURL.searchParams.set("state", crypto.randomUUID?.() || Date.now().toString(36));
-
-    // Open in a centered popup
-    const width = 500;
-    const height = 700;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    const popup = window.open(
-        githubAuthURL.toString(),
-        "github-signin",
-        `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no`
-    );
-
-    return popup;
+    window.location.href =
+        "https://cognix-backend-nukk.onrender.com/api/auth/github";
 }
-
 // ═══════════════════════════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════════════════════════

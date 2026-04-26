@@ -1363,6 +1363,17 @@ app.post("/api/auth/github", async (req, res) => {
         res.status(500).json({ success: false });
     }
 });
+app.get("/api/auth/github", (req, res) => {
+    const redirectUrl =
+        "https://github.com/login/oauth/authorize?" +
+        new URLSearchParams({
+            client_id: process.env.GITHUB_CLIENT_ID,
+            redirect_uri: process.env.GITHUB_REDIRECT_URI,
+            scope: "read:user user:email",
+        });
+
+    res.redirect(redirectUrl);
+});
 
 
 
