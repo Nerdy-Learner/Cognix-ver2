@@ -37,7 +37,7 @@ env/
 # MODEL FILES (OPTIONAL)
 # Uncomment if models are large
 # ==============================
-cognix-backend/models/*.pkl
+# cognix-backend/models/*.pkl
 
 # ==============================
 # NODE / FRONTEND
@@ -48,8 +48,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Vite build output
-dist/
+# Vite build output (only root level, not cognix-frontend/dist)
+/dist/
 
 # ==============================
 # FRONTEND CACHE

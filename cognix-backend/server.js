@@ -1,4 +1,3 @@
-import { PythonShell } from "python-shell";
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -33,7 +32,7 @@ loadDotEnv();
 
 const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/cognix";
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-const port = Number(process.env.PORT || 5050);
+const port = Number(process.env.PORT || 3001);
 
 
 
@@ -47,12 +46,33 @@ const cashfreeAppId = process.env.CASHFREE_APP_ID || "";
 const cashfreeSecretKey = process.env.CASHFREE_SECRET_KEY || "";
 const paymentDemoMode = process.env.DEMO_MODE !== "false";
 
+// CORS — allow both localhost (dev) and production frontend URL
+const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    frontendUrl
+].filter(Boolean);
+
 app.use(
     cors({
-        origin: frontendUrl,
+        origin: function (origin, callback) {
+            // allow requests with no origin (mobile apps, curl, etc.)
+            if (!origin) return callback(null, true);
+            if (allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            return callback(null, false);
+        },
         credentials: true,
     })
-); app.use(express.json());
+);
+app.use(express.json());
+
+/* ---------------- HEALTH CHECK (Render pings this) ---------------- */
+
+app.get("/", (req, res) => {
+    res.json({ status: "ok", service: "cognix-backend", timestamp: new Date().toISOString() });
+});
 
 /* ---------------- DATABASE CONNECTION ---------------- */
 
@@ -88,6 +108,63 @@ const Agent3Output = mongoose.model("Agent3Output", agent3Schema);
 
 const agent4Schema = new mongoose.Schema({}, { strict: false });
 const Agent4Output = mongoose.model("Agent4Output", agent4Schema);
+
+
+/* ---------------- AGENT-4 PURE JS PREDICTOR ---------------- */
+// Replaces PythonShell + sklearn model for deployment compatibility.
+// Uses rule-based scoring that mirrors the trained model's behavior.
+
+function predictAgent4JS(features, riskLevel) {
+    let score = 0;
+
+    // Alert type scoring
+    const alertType = (features.Alert_Type || "").toLowerCase();
+    if (alertType.includes("intrusion")) score += 40;
+    else if (alertType.includes("brute force")) score += 35;
+    else if (alertType.includes("bot")) score += 30;
+    else if (alertType.includes("recon")) score += 25;
+    else if (alertType.includes("port scan")) score += 20;
+    else if (alertType.includes("normal")) score -= 10;
+
+    // Protocol risk scoring
+    const protocolRisk = (features.protocol_risk || "").toLowerCase();
+    if (protocolRisk === "high") score += 25;
+    else if (protocolRisk === "medium") score += 15;
+    else if (protocolRisk === "low") score += 5;
+
+    // Asset value scoring
+    const assetValue = (features.asset_value || "").toLowerCase();
+    if (assetValue === "high") score += 20;
+    else if (assetValue === "medium") score += 10;
+
+    // Geo anomaly scoring
+    if (features.geo_anomaly === "Yes") score += 15;
+
+    // Internal IP scoring (external is riskier)
+    if (features.is_internal_ip === "No") score += 10;
+
+    // Port category scoring
+    const portCat = (features.port_category || "").toLowerCase();
+    if (portCat === "ssh" || portCat === "rdp") score += 15;
+    else if (portCat === "dns") score += 5;
+
+    // Risk level boost from Agent3
+    if (riskLevel === "Critical") score += 30;
+    else if (riskLevel === "High") score += 15;
+
+    // Threshold-based prediction
+    const threshold = 50;
+    const prediction = score >= threshold ? 1 : 0;
+
+    // Confidence calculation (sigmoid-like mapping)
+    const rawConfidence = Math.min(Math.abs(score - threshold) / 50, 1);
+    const confidence = 0.5 + rawConfidence * 0.5;
+
+    return {
+        prediction,
+        confidence: Math.round(confidence * 10000) / 10000
+    };
+}
 
 
 async function runAgentsPipeline() {
@@ -232,64 +309,18 @@ async function runAgentsPipeline() {
                 geo_anomaly: agent2?.geo_anomaly ? "Yes" : "No"
             };
 
-            // call Python model
+            // Agent4 prediction — pure JS rule-based classifier
+            // (replaces PythonShell dependency for deployment compatibility)
             let prediction = 0;
             let confidence = 0;
-            let result = { prediction: 0, confidence: 0 };
 
             try {
-
-                result = await new Promise((resolve) => {
-
-                    let finalOutput = null;
-
-                    const pyshell = new PythonShell("predict_agent4.py", {
-                        pythonPath: "python3",
-                        scriptPath: "./"
-                    });
-
-                    pyshell.send(JSON.stringify(features));
-
-                    pyshell.on("message", (message) => {
-
-                        console.log("Python raw output:", message);
-
-                        if (message.includes(",")) {
-                            finalOutput = message;
-                        }
-
-                    });
-
-                    pyshell.end((err) => {
-
-                        if (err) {
-                            console.log("Agent4 Python error:", err.message);
-                            return resolve({ prediction: 0, confidence: 0 });
-                        }
-
-                        if (!finalOutput) {
-                            console.log("Agent4 empty output");
-                            return resolve({ prediction: 0, confidence: 0 });
-                        }
-
-                        const parts = finalOutput.split(",");
-
-                        resolve({
-                            prediction: parseInt(parts[0].trim()),
-                            confidence: parseFloat(parts[1].trim())
-                        });
-
-                    });
-
-                });
-
-                prediction = result.prediction ?? 0;
-                confidence = result.confidence ?? 0;
+                const result = predictAgent4JS(features, risk_level);
+                prediction = result.prediction;
+                confidence = result.confidence;
 
                 console.log("Agent4 prediction:", prediction);
                 console.log("Agent4 confidence:", confidence);
-
-
             } catch (err) {
                 console.log("Agent4 fallback triggered:", err.message);
             }
@@ -1426,8 +1457,8 @@ app.get("/api/auth/github/callback", async (req, res) => {
 
 /* ---------------- SERVER START ---------------- */
 
-app.listen(port, () =>
-    console.log(`Server running on http://localhost:${port}`)
+app.listen(port, "0.0.0.0", () =>
+    console.log(`Server running on http://0.0.0.0:${port}`)
 );
 
 

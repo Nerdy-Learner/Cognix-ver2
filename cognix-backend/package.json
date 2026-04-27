@@ -1,11 +1,16 @@
 {
   "name": "cognix-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Cognix SOC AI Backend",
+  "main": "server.js",
   "type": "module",
   "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "keywords": [],
   "author": "",
@@ -14,7 +19,6 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "mongoose": "^9.2.4",
-    "python-shell": "^5.0.0"
+    "mongoose": "^9.2.4"
   }
 }

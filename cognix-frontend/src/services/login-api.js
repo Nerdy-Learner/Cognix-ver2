@@ -465,8 +465,8 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; // Replace with 
 //     return popup;
 // }
 export function initiateGoogleSignIn() {
-    window.location.href =
-        "https://cognix-backend-nukk.onrender.com/api/auth/google";
+    const backendBase = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
+    window.location.href = `${backendBase}/api/auth/google`;
 }
 // ═══════════════════════════════════════════════════════════════
 // GITHUB OAUTH
@@ -504,8 +504,8 @@ const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID; // Replace with 
 //     return popup;
 // }
 export function initiateGitHubSignIn() {
-    window.location.href =
-        "https://cognix-backend-nukk.onrender.com/api/auth/github";
+    const backendBase = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
+    window.location.href = `${backendBase}/api/auth/github`;
 }
 // ═══════════════════════════════════════════════════════════════
 // UTILITIES
