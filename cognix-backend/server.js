@@ -45,7 +45,7 @@ const cashfreeApiBase =
 const cashfreeApiVersion = process.env.CASHFREE_API_VERSION || "2025-01-01";
 const cashfreeAppId = process.env.CASHFREE_APP_ID || "";
 const cashfreeSecretKey = process.env.CASHFREE_SECRET_KEY || "";
-const paymentDemoMode = process.env.DEMO_MODE !== "false";
+const paymentDemoMode = process.env.DEMO_MODE === "true";
 
 // CORS — allow both localhost (dev) and production frontend URL
 const allowedOrigins = [
