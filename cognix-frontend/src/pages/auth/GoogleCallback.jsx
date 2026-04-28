@@ -53,6 +53,8 @@ export default function GoogleCallback() {
                         window.opener.location.href = "/login";
 
                         window.close();
+                    } else {
+                        window.location.href = "/login";
                     }
                 }
 
