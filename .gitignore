@@ -37,7 +37,8 @@ env/
 # MODEL FILES (OPTIONAL)
 # Uncomment if models are large
 # ==============================
-# cognix-backend/models/*.pkl
+cognix-backend/models/*.pkl
+cognix-backend/models/*.csv
 
 # ==============================
 # NODE / FRONTEND

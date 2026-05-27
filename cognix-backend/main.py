@@ -45,7 +45,9 @@ db_name = "cognix"
 if "mongodb+srv://" in mongo_uri:
     try:
         path_part = mongo_uri.split("://")[1].split("/", 1)[1]
-        db_name = path_part.split("?")[0]
+        parsed = path_part.split("?")[0]
+        if parsed:
+            db_name = parsed
     except Exception:
         db_name = "cognix"
 
@@ -109,9 +111,14 @@ def analyze_alert(alert: dict):
             alert if "Source_IP" in alert else alert.get("alert", {})
         )
 
-        # store a COPY in DB (important)
-        db_result = result.copy()
-        final_collection.insert_one(db_result)
+        # store a COPY in DB safely (prevent DuplicateKeyError from breaking response)
+        try:
+            db_result = result.copy()
+            if "_id" in db_result:
+                del db_result["_id"]
+            final_collection.insert_one(db_result)
+        except Exception as db_err:
+            print(f"Database insertion warning: {db_err}")
 
         return result
 

@@ -35,7 +35,7 @@ loadDotEnv();
 const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/cognix";
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 const port = Number(process.env.PORT || 3001);
-const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8002";
+const pythonBackendUrl = (process.env.PYTHON_BACKEND_URL || "http://localhost:8002").replace(/\/$/, "");
 
 
 
@@ -80,9 +80,9 @@ app.get("/", (req, res) => {
 /* ---------------- DATABASE CONNECTION ---------------- */
 
 mongoose
-    .connect(mongoUri)
-    .then(() => console.log("MongoDB connected"))
-    .catch((err) => console.log(err));
+    .connect(mongoUri, { dbName: "cognix" })
+    .then(() => console.log("MongoDB connected to database: cognix"))
+    .catch((err) => console.log("MongoDB connection error:", err));
 
 
 /* ---------------- SCHEMAS ---------------- */
@@ -177,213 +177,142 @@ async function runAgentsPipeline() {
         const unprocessedIncidents = await Incident.find({ processed: false });
 
         for (const incident of unprocessedIncidents) {
-            console.log("Processing incident:", incident._id);
+            try {
+                console.log("Processing incident:", incident._id);
 
-            if (incident.processed) continue;
+                if (incident.processed) continue;
 
-            // Agent 1 output
-            // =========================
-            // REAL FASTAPI AGENT-1
-            // =========================
+                // Agent 1 output
+                // =========================
+                // REAL FASTAPI AGENT-1
+                // =========================
 
-            const fastapiResponse = await axios.post(
-                `${pythonBackendUrl}/analyze`,
-                {
-                    alert: incident
+                const fastapiResponse = await axios.post(
+                    `${pythonBackendUrl}/analyze`,
+                    {
+                        alert: incident
+                    }
+                );
+
+                const pipeline = fastapiResponse.data;
+
+                if (!pipeline || pipeline.error || !pipeline.agent_outputs) {
+                    console.error(`Skipping incident ${incident._id} due to FastAPI error:`, pipeline?.error || "Invalid response structure");
+                    continue;
                 }
-            );
 
-            const pipeline = fastapiResponse.data;
-
-            const fastapiAgent1 = pipeline.agent_outputs[0];
-
-            const parsedType =
-                pipeline.features?.attack_type || "BENIGN";
-
-            await Agent1Output.create({
-
-                incidentId: incident._id,
-
-                agent: fastapiAgent1.agent,
-
-                decision: fastapiAgent1.decision,
-
-                confidence: fastapiAgent1.confidence,
-
-                metadata: {
-                    attack_type: parsedType
-                },
-
-                processedAt: new Date()
-            });
-
-            console.log("REAL Agent-1 done");
-
-
-            // // Agent 2 output
-            // =========================
-            // REAL FASTAPI AGENT-2
-            // =========================
-
-            const fastapiAgent2 =
-                pipeline.agent_outputs[1];
-
-            const mitreFeatures =
-                pipeline.features || {};
-
-            await Agent2Output.create({
-
-                incidentId: incident._id,
-
-                agent: fastapiAgent2.agent,
-
-                decision: fastapiAgent2.decision,
-
-                confidence: fastapiAgent2.confidence,
-
-                metadata: {
-
-                    mitre_tactic:
-                        mitreFeatures.mitre_tactic,
-
-                    mitre_technique:
-                        mitreFeatures.mitre_technique,
-
-                    severity:
-                        mitreFeatures.agent2_severity,
-
-                    category:
-                        mitreFeatures.matched_rule,
-
-                    priority:
-                        fastapiAgent2.reason,
-
-                    is_internal_ip:
-                        "Unknown",
-
-                    port_category:
-                        "Unknown",
-
-                    protocol_risk:
-                        "Unknown",
-
-                    asset_value:
-                        "Unknown",
-
-                    geo_anomaly:
-                        false
-                },
-
-                processedAt: new Date()
-            });
-
-            console.log("REAL Agent-2 done");
-
-            // // Agent 3 output
-            // =========================
-            // REAL FASTAPI AGENT-3
-            // =========================
-
-            const fastapiAgent3 =
-                pipeline.agent_outputs[2];
-
-            const riskFeatures =
-                pipeline.features || {};
-
-            await Agent3Output.create({
-
-                incidentId: incident._id,
-
-                agent: fastapiAgent3.agent,
-
-                decision: fastapiAgent3.decision,
-
-                confidence: fastapiAgent3.confidence,
-
-                metadata: {
-
-                    user:
-                        incident.src_user ||
-                        "Administrator",
-
-                    risk_score:
-                        riskFeatures.risk_score || 0,
-
-                    risk_level:
-                        riskFeatures.risk_level || "LOW",
-
-                    behavioral_score:
-                        riskFeatures.risk_score || 0,
-
-                    attack_type:
-                        parsedType,
-
-                    severity:
-                        riskFeatures.agent2_severity
-                        || "Low",
-
-                    user_behavior:
-                        riskFeatures.risk_level === "HIGH"
-                            ? "Anomalous"
-                            : "Normal",
-
-                    reason:
-                        fastapiAgent3.reason
-                },
-
-                processedAt: new Date()
-            });
-
-            console.log("REAL Agent-3 done");
-
-            // =========================
-            // REAL FASTAPI AGENT-4
-            // =========================
-
-            const fastapiAgent4 =
-                pipeline.agent_outputs[3];
-
-            const finalFeatures =
-                pipeline.features || {};
-
-            await Agent4Output.create({
-
-                incidentId: incident._id,
-
-                agent: fastapiAgent4.agent,
-
-                decision: fastapiAgent4.decision,
-
-                confidence: fastapiAgent4.confidence,
-
-                metadata: {
-
-                    action:
-                        finalFeatures.soc_action,
-
-                    priority:
-                        finalFeatures.soc_priority,
-
-                    risk_level:
-                        finalFeatures.risk_level,
-
-                    risk_score:
-                        finalFeatures.risk_score,
-
-                    recommended_response:
-                        fastapiAgent4.reason,
-
-                    soc_action:
-                        finalFeatures.soc_action
-                },
-
-                processedAt: new Date()
-            });
-
-            console.log("REAL Agent-4 done");
+                const fastapiAgent1 = pipeline.agent_outputs[0];
+                const fastapiAgent2 = pipeline.agent_outputs[1];
+                const fastapiAgent3 = pipeline.agent_outputs[2];
+                const fastapiAgent4 = pipeline.agent_outputs[3];
+
+                if (!fastapiAgent1 || !fastapiAgent2 || !fastapiAgent3 || !fastapiAgent4) {
+                    console.error(`Skipping incident ${incident._id} because agent outputs are incomplete`);
+                    continue;
+                }
+
+                const parsedType = pipeline.features?.attack_type || "BENIGN";
+
+                await Agent1Output.create({
+                    incidentId: incident._id,
+                    agent: fastapiAgent1.agent,
+                    decision: fastapiAgent1.decision,
+                    confidence: fastapiAgent1.confidence,
+                    metadata: {
+                        attack_type: parsedType
+                    },
+                    processedAt: new Date()
+                });
+                console.log("REAL Agent-1 done");
+
+                // Agent 2 output
+                // =========================
+                // REAL FASTAPI AGENT-2
+                // =========================
+
+                const mitreFeatures = pipeline.features || {};
+
+                await Agent2Output.create({
+                    incidentId: incident._id,
+                    agent: fastapiAgent2.agent,
+                    decision: fastapiAgent2.decision,
+                    confidence: fastapiAgent2.confidence,
+                    metadata: {
+                        mitre_tactic: mitreFeatures.mitre_tactic,
+                        mitre_technique: mitreFeatures.mitre_technique,
+                        severity: mitreFeatures.agent2_severity,
+                        category: mitreFeatures.matched_rule,
+                        priority: fastapiAgent2.reason,
+                        is_internal_ip: "Unknown",
+                        port_category: "Unknown",
+                        protocol_risk: "Unknown",
+                        asset_value: "Unknown",
+                        geo_anomaly: false
+                    },
+                    processedAt: new Date()
+                });
+                console.log("REAL Agent-2 done");
+
+                // Agent 3 output
+                // =========================
+                // REAL FASTAPI AGENT-3
+                // =========================
+
+                const riskFeatures = pipeline.features || {};
+
+                await Agent3Output.create({
+                    incidentId: incident._id,
+                    agent: fastapiAgent3.agent,
+                    decision: fastapiAgent3.decision,
+                    confidence: fastapiAgent3.confidence,
+                    metadata: {
+                        user: incident.src_user || "Administrator",
+                        risk_score: riskFeatures.risk_score || 0,
+                        risk_level: riskFeatures.risk_level || "LOW",
+                        behavioral_score: riskFeatures.risk_score || 0,
+                        attack_type: parsedType,
+                        severity: riskFeatures.agent2_severity || "Low",
+                        user_behavior: riskFeatures.risk_level === "HIGH" ? "Anomalous" : "Normal",
+                        reason: fastapiAgent3.reason
+                    },
+                    processedAt: new Date()
+                });
+                console.log("REAL Agent-3 done");
+
+                // Agent 4 output
+                // =========================
+                // REAL FASTAPI AGENT-4
+                // =========================
+
+                const finalFeatures = pipeline.features || {};
+
+                await Agent4Output.create({
+                    incidentId: incident._id,
+                    agent: fastapiAgent4.agent,
+                    decision: fastapiAgent4.decision,
+                    confidence: fastapiAgent4.confidence,
+                    metadata: {
+                        action: finalFeatures.soc_action,
+                        priority: finalFeatures.soc_priority,
+                        risk_level: finalFeatures.risk_level,
+                        risk_score: finalFeatures.risk_score,
+                        recommended_response: fastapiAgent4.reason,
+                        soc_action: finalFeatures.soc_action
+                    },
+                    processedAt: new Date()
+                });
+                console.log("REAL Agent-4 done");
+
+                // Successfully processed - persist status to MongoDB
+                await Incident.findByIdAndUpdate(incident._id, { processed: true });
+                console.log(`Incident ${incident._id} successfully processed and saved.`);
+
+            } catch (incidentErr) {
+                console.error(`Error processing incident ${incident._id}:`, incidentErr.message || incidentErr);
+            }
         }
 
-        console.log("Pipeline completed successfully");
+        console.log("Pipeline processing pass completed.");
 
     } catch (err) {
         console.error("Pipeline error:", err);
