@@ -37,6 +37,14 @@ const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 const port = Number(process.env.PORT || 3001);
 const pythonBackendUrl = (process.env.PYTHON_BACKEND_URL || "http://localhost:8002").replace(/\/$/, "");
 
+console.log("-----------------------------------------");
+console.log("Cognix Backend Startup Configurations:");
+console.log(" - Port:", port);
+console.log(" - Mongo URI:", mongoUri.replace(/:([^:@]+)@/, ":*****@"));
+console.log(" - Frontend URL:", frontendUrl);
+console.log(" - Python Backend URL:", pythonBackendUrl);
+console.log("-----------------------------------------");
+
 
 
 const cashfreeEnv = process.env.CASHFREE_ENV === "production" ? "production" : "sandbox";
@@ -191,6 +199,9 @@ async function runAgentsPipeline() {
                     `${pythonBackendUrl}/analyze`,
                     {
                         alert: incident
+                    },
+                    {
+                        timeout: 100000 // 100 seconds to allow for Render cold starts
                     }
                 );
 
