@@ -4,6 +4,7 @@ import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
 import { getRisk, getRiskStyles } from "../utils/risk";
 import { getFullIncidents } from "../services/api";
+import { getIPStyle, getAttackTypeStyle, getRouteStyle } from "../utils/colors";
 
 const severityOrder = { High: 0, Medium: 1, Low: 2 };
 
@@ -37,11 +38,15 @@ export default function Incidents() {
 
   const filteredIncidents = useMemo(() => {
     return incidents
-      .map((incident, index) => ({
-        ...incident,
-        risk: incident.agent3?.risk_level || "Low",
-        id: incident._id || `${incident.Type || "incident"}-${incident.Timestamp || index}`,
-      }))
+      .map((incident, index) => {
+        const rawRisk = incident.agent3?.risk_level || incident.agent3?.decision || "Low";
+        const risk = rawRisk.charAt(0).toUpperCase() + rawRisk.slice(1).toLowerCase();
+        return {
+          ...incident,
+          risk,
+          id: incident._id || `${incident.Type || "incident"}-${incident.Timestamp || index}`,
+        };
+      })
       .filter((incident) => {
         const haystack = Object.values(incident).join(" ").toLowerCase();
 
@@ -160,27 +165,27 @@ export default function Incidents() {
                     <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 14 }}>
                       <div>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                          <strong style={{ color: "white", fontSize: 15 }}>{incident.agent1?.agent1_label || incident.Scan_Type || "Unknown incident"}</strong>
+                          <strong style={{ ...getAttackTypeStyle(incident.agent1?.decision || incident.agent1?.attack_type || incident.agent1?.agent1_label || incident.Scan_Type), fontSize: 15 }}>{incident.agent1?.decision || incident.agent1?.attack_type || incident.agent1?.agent1_label || incident.Scan_Type || "Unknown incident"}</strong>
                           <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${getRiskStyles(incident.risk)}`}>
                             {incident.risk}
                           </span>
 
-                          {incident.agent4?.decision && (
+                          {(incident.agent4?.action || incident.agent4?.decision) && (
                             <span
                               className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
                               style={{
                                 background:
-                                  incident.agent4.decision === "Escalate"
+                                  ["Escalate", "ESCALATE", "BLOCK"].includes(incident.agent4.action || incident.agent4.decision)
                                     ? "rgba(255,80,80,.18)"
                                     : "rgba(88,213,155,.18)",
                                 color:
-                                  incident.agent4.decision === "Escalate"
+                                  ["Escalate", "ESCALATE", "BLOCK"].includes(incident.agent4.action || incident.agent4.decision)
                                     ? "#ff5050"
                                     : "#58d59b",
                                 border: "1px solid rgba(255,255,255,.12)"
                               }}
                             >
-                              {incident.agent4.decision}
+                              {incident.agent4.action || incident.agent4.decision}
                             </span>
                           )}
 
@@ -242,10 +247,17 @@ export default function Incidents() {
                       )
                         return null;
 
+                      let detailStyle = { marginTop: 10, lineHeight: 1.5 };
+                      if (key.toLowerCase().includes("ip")) {
+                        detailStyle = { ...detailStyle, ...getIPStyle(value) };
+                      } else if (key.toLowerCase() === "protocol") {
+                        detailStyle = { ...detailStyle, ...getProtocolStyle(value) };
+                      }
+
                       return (
                         <div key={key} className="signal-stage">
                           <div className="label-xs">{key}</div>
-                          <strong style={{ marginTop: 10, lineHeight: 1.5 }}>
+                          <strong style={detailStyle}>
                             {String(value || "—")}
                           </strong>
                         </div>
@@ -255,20 +267,28 @@ export default function Incidents() {
                     {/* AGENT PIPELINE OUTPUT */}
                     {/* AGENT PIPELINE OUTPUT */}
                     {[
-                      ["Agent 1 Label", selectedIncident.agent1?.agent1_label],
-                      ["Protocol Risk", selectedIncident.agent2?.protocol_risk],
-                      ["Asset Value", selectedIncident.agent2?.asset_value],
-                      ["Risk Level", selectedIncident.agent3?.risk_level],
-                      ["Decision", selectedIncident.agent4?.decision],
-                      ["Confidence", selectedIncident.agent4?.confidence],
-                    ].map(([label, value]) => (
-                      <div key={label} className="signal-stage">
-                        <div className="label-xs">{label}</div>
-                        <strong style={{ marginTop: 10, lineHeight: 1.5 }}>
-                          {value ?? "—"}
-                        </strong>
-                      </div>
-                    ))}
+                      ["Agent 1 Label", selectedIncident.agent1?.decision || selectedIncident.agent1?.attack_type || selectedIncident.agent1?.agent1_label],
+                      ["Agent 2 Tactic / Protocol Risk", selectedIncident.agent2?.tactic || selectedIncident.agent2?.protocol_risk],
+                      ["Agent 3 Risk Level", selectedIncident.agent3?.risk_level],
+                      ["Agent 4 Action", selectedIncident.agent4?.action || selectedIncident.agent4?.decision],
+                      ["Confidence", selectedIncident.agent4?.confidence ? selectedIncident.agent4.confidence.toFixed(3) : "—"],
+                    ].map(([label, value]) => {
+                      let agentStyle = { marginTop: 10, lineHeight: 1.5 };
+                      if (label.includes("Agent 1")) {
+                        agentStyle = { ...agentStyle, ...getAttackTypeStyle(value) };
+                      } else if (label.includes("Agent 4") || label.includes("Action") || label.includes("Risk Level")) {
+                        agentStyle = { ...agentStyle, ...getRouteStyle(value) };
+                      }
+
+                      return (
+                        <div key={label} className="signal-stage">
+                          <div className="label-xs">{label}</div>
+                          <strong style={agentStyle}>
+                            {value ?? "—"}
+                          </strong>
+                        </div>
+                      );
+                    })}
                   </>
                 </div>
               </>

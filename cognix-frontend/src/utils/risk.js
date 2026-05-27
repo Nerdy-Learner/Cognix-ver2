@@ -23,11 +23,12 @@ export function getRisk(type) {
 }
 
 export function getRiskStyles(risk) {
-    if (risk === "High") {
+    const normalized = risk ? risk.charAt(0).toUpperCase() + risk.slice(1).toLowerCase() : "Low";
+    if (normalized === "High" || normalized === "Critical") {
         return "bg-red-500/10 text-[#E4223A] border border-red-500/20";
     }
 
-    if (risk === "Medium") {
+    if (normalized === "Medium") {
         return "bg-orange-500/10 text-[#F97316] border border-orange-500/20";
     }
 

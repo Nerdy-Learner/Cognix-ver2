@@ -52,8 +52,21 @@ export const getStageLatency = (stage) =>
     API.get(`/stage-latency/${stage}`);
 
 // datasets per stage
-export const getDatasetByStage = (stage) =>
-    API.get(`/${stage}`);
+export const getDatasetByStage = (stage) => {
+    const routeMap = {
+        agent_1_output: "agent1",
+        agent_2_output: "agent2",
+        agent_3_output: "agent3",
+        agent_4_output: "agent4",
+        incidents: "incidents"
+    };
+    const endpoint = routeMap[stage] || stage;
+    return API.get(`/${endpoint}`);
+};
 
 // reports
 export const getReports = () => API.get("/reports");
+
+// trigger FastAPI orchestration
+export const runPipeline = () =>
+    axios.post("http://localhost:8002/analyze-all");

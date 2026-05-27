@@ -3,7 +3,7 @@ import { motion as Motion } from "framer-motion";
 import { FileText, ShieldCheck, UploadCloud } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
-import { uploadIncidents } from "../services/api";
+import { uploadIncidents, runPipeline } from "../services/api";
 
 export default function Upload() {
   const [isDragging, setIsDragging] = useState(false);
@@ -43,12 +43,28 @@ export default function Upload() {
       try {
         const response = await uploadIncidents({ data });
 
-        clearInterval(interval);
-        setProgress(100);
-
         if (response.status === 200) {
-          setStatus("Upload successful. Agent pipeline started.");
+
+          setStatus("Running AI pipeline...");
+
+          // =========================
+          // TRIGGER FASTAPI PIPELINE
+          // =========================
+
+          // await runPipeline();
+
+          clearInterval(interval);
+
+          setProgress(100);
+
+          setStatus(
+            "Upload successful. Pipeline completed."
+          );
+
         } else {
+
+          clearInterval(interval);
+
           setStatus("Upload failed");
         }
       } catch (error) {

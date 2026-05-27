@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Bot,
   FileText,
+  FlaskConical,
   LayoutDashboard,
   Radio,
   Settings,

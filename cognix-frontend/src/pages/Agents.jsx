@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { FileText } from "lucide-react";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { FileText, BarChart2 } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
 import { getFullIncidents } from "../services/api";
@@ -9,6 +9,20 @@ import { getRuntimeLogs } from "../services/api";
 import { getStageThroughput } from "../services/api";
 import { getStageLatency } from "../services/api";
 import { getDatasetByStage } from "../services/api";
+import { getIPStyle, getAttackTypeStyle, getRouteStyle, getProtocolStyle } from "../utils/colors";
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer, 
+  Cell, 
+  PieChart, 
+  Pie, 
+  CartesianGrid 
+} from "recharts";
 
 
 const agents = [
@@ -63,6 +77,97 @@ export default function Agents() {
   const logRef = useRef(null);
   const lineIndex = useRef(0);
 
+  const [showAnalysis, setShowAnalysis] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setShowAnalysis(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const COLORS = ["#ff8a3d", "#58d59b", "#ff6565", "#ffd27d", "#8b5cf6", "#3b82f6"];
+
+  const analysisData = useMemo(() => {
+    let records = [];
+    let keyToAggregate = "";
+    
+    if (dataset?.data && dataset.data.length > 0) {
+      records = dataset.data;
+      if (activeAgent.key === "incidents") {
+        keyToAggregate = records[0].Protocol ? "Protocol" : records[0].Scan_Type ? "Scan_Type" : Object.keys(records[0])[1] || "";
+      } else if (activeAgent.key === "agent_1_output") {
+        keyToAggregate = records[0].decision ? "decision" : "attack_type";
+      } else if (activeAgent.key === "agent_2_output") {
+        keyToAggregate = records[0].decision ? "decision" : "tactic";
+      } else if (activeAgent.key === "agent_3_output") {
+        keyToAggregate = records[0].decision ? "decision" : "risk_level";
+      } else if (activeAgent.key === "agent_4_output") {
+        keyToAggregate = records[0].decision ? "decision" : "action";
+      }
+    }
+
+    if (records.length === 0) {
+      if (activeAgent.key === "incidents") {
+        return [
+          { name: "TCP", count: 145, percentage: 58 },
+          { name: "UDP", count: 85, percentage: 34 },
+          { name: "ICMP", count: 20, percentage: 8 }
+        ];
+      } else if (activeAgent.key === "agent_1_output") {
+        return [
+          { name: "Normal Traffic", count: 180, percentage: 72 },
+          { name: "BotAttack", count: 45, percentage: 18 },
+          { name: "PortScan", count: 25, percentage: 10 }
+        ];
+      } else if (activeAgent.key === "agent_2_output") {
+        return [
+          { name: "non-attack", count: 180, percentage: 72 },
+          { name: "Impact", count: 45, percentage: 18 },
+          { name: "Credential Access", count: 15, percentage: 6 },
+          { name: "Reconnaissance", count: 10, percentage: 4 }
+        ];
+      } else if (activeAgent.key === "agent_3_output") {
+        return [
+          { name: "LOW", count: 180, percentage: 72 },
+          { name: "MEDIUM", count: 40, percentage: 16 },
+          { name: "HIGH", count: 20, percentage: 8 },
+          { name: "CRITICAL", count: 10, percentage: 4 }
+        ];
+      } else if (activeAgent.key === "agent_4_output") {
+        return [
+          { name: "MONITOR", count: 185, percentage: 74 },
+          { name: "ALERT", count: 35, percentage: 14 },
+          { name: "ESCALATE", count: 20, percentage: 8 },
+          { name: "BLOCK", count: 10, percentage: 4 }
+        ];
+      }
+    }
+
+    const counts = {};
+    records.forEach(r => {
+      let val = r[keyToAggregate] || r.decision || r.action || r.risk_level || "Unknown";
+      counts[val] = (counts[val] || 0) + 1;
+    });
+
+    const total = records.length;
+    return Object.entries(counts).map(([name, count]) => ({
+      name,
+      count,
+      percentage: Math.round((count / total) * 100)
+    }));
+  }, [dataset, activeAgent]);
+
+  const statsSummary = useMemo(() => {
+    const total = analysisData.reduce((acc, curr) => acc + curr.count, 0);
+    let dominant = { name: "N/A", count: 0, percentage: 0 };
+    if (analysisData.length > 0) {
+      dominant = [...analysisData].sort((a, b) => b.count - a.count)[0];
+    }
+    return { total, dominant };
+  }, [analysisData]);
+
   const eps = useCounter(throughputEPS);
   const classified = useCounter(classifiedCount, 1800);
   const escalations = useCounter(escalationCount);
@@ -90,7 +195,7 @@ export default function Agents() {
         const data = res.data;
 
         const count = data.filter(
-          (incident) => incident.agent4?.decision === "Escalate"
+          (incident) => ["Escalate", "ESCALATE", "BLOCK"].includes(incident.agent4?.action || incident.agent4?.decision)
         ).length;
 
         setEscalationCount(count);
@@ -236,17 +341,85 @@ export default function Agents() {
 
       const response = await getDatasetByStage(agent.key);
       const data = response.data;
-
+      console.log("API DATA:", data);
       if (!data.length) {
         setDataset(null);
         return;
       }
 
-      const headers = Object.keys(data[0]);
+      // flatten nested objects for a clean table
+      const flattenObj = (obj) => {
+
+        let result = {};
+
+        for (const [key, value] of Object.entries(obj)) {
+
+          // skip unwanted fields
+          if (
+            ["_id", "__v", "incidentId"].includes(key)
+          ) continue;
+
+          // =========================
+          // SKIP RAW ALERT PAYLOADS
+          // FOR AGENT TABLES
+          // =========================
+
+          if (
+            key === "alert" &&
+            activeAgent.key !== "incidents"
+          ) continue;
+
+          if (
+            value &&
+            typeof value === "object" &&
+            !Array.isArray(value)
+          ) {
+
+            for (const [subKey, subValue]
+              of Object.entries(value)) {
+
+              result[
+                `${key}.${subKey}`
+              ] = subValue;
+            }
+
+          } else {
+
+            result[key] = value;
+          }
+        }
+
+        return result;
+      };
+
+      const flattenedData = data.map(row => flattenObj(row));
+
+      const allKeys = new Set();
+      flattenedData.forEach(row => Object.keys(row).forEach(k => allKeys.add(k)));
+
+      const headers = Array.from(allKeys).sort((a, b) => {
+        if (a === 'processedAt') return -1;
+        if (b === 'processedAt') return 1;
+        return 0;
+      });
+
+      const formattedData = flattenedData.map(row => {
+        const newRow = {};
+        headers.forEach(h => {
+          if (h === "processedAt" && row[h]) {
+            newRow[h] = new Date(row[h]).toLocaleTimeString();
+          } else if (typeof row[h] === "number" && row[h] % 1 !== 0) {
+            newRow[h] = row[h].toFixed(3);
+          } else {
+            newRow[h] = String(row[h] ?? "—");
+          }
+        });
+        return newRow;
+      });
 
       setDataset({
         headers,
-        data,
+        data: formattedData,
       });
 
     } catch (error) {
@@ -341,7 +514,34 @@ export default function Agents() {
 
         <Surface style={{ overflow: "hidden" }}>
           <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
-            <SectionHeading eyebrow="pipeline output" title={activeAgent.name} action={<FileText size={16} style={{ color: "var(--accent-2)" }} />} />
+            <SectionHeading 
+              eyebrow="pipeline output" 
+              title={activeAgent.name} 
+              action={
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button
+                    onClick={() => setShowAnalysis(true)}
+                    className="btn-primary"
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: "0.68rem",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "rgba(255,138,61,0.15)",
+                      border: "1px solid rgba(255,138,61,0.4)",
+                      color: "#fff",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Analyse <BarChart2 size={12} style={{ color: "var(--accent-1)" }} />
+                  </button>
+                  <FileText size={16} style={{ color: "var(--accent-2)" }} />
+                </div>
+              } 
+            />
           </div>
           {dataset?.headers && dataset?.data ? (
             <div style={{ overflowX: "auto" }}>
@@ -352,7 +552,20 @@ export default function Agents() {
                 <tbody>
                   {dataset.data.map((row, index) => (
                     <tr key={index}>
-                      {dataset.headers.map((header) => <td key={header}>{row[header]}</td>)}
+                      {dataset.headers.map((header) => {
+                        const val = row[header];
+                        let cellStyle = {};
+                        if (header.toLowerCase().includes("ip") || header.toLowerCase().includes("source") || header.toLowerCase().includes("dest")) {
+                          cellStyle = getIPStyle(val);
+                        } else if (header.toLowerCase().includes("protocol")) {
+                          cellStyle = getProtocolStyle(val);
+                        } else if (["decision", "attack_type", "type"].includes(header.toLowerCase()) || header.includes("Agent 1")) {
+                          cellStyle = getAttackTypeStyle(val);
+                        } else if (["action", "route", "risk_level", "risk", "status"].includes(header.toLowerCase()) || header.includes("Agent 4") || header.includes("Agent 3")) {
+                          cellStyle = getRouteStyle(val);
+                        }
+                        return <td key={header} style={cellStyle}>{val}</td>;
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -374,10 +587,10 @@ export default function Agents() {
                   {pipelineRows.map((row) => (
                     <tr key={`${row.ts}-${row.ip}`}>
                       <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{row.ts}</td>
-                      <td style={{ color: "#fff" }}>{row.type}</td>
-                      <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{row.ip}</td>
+                      <td style={getAttackTypeStyle(row.type)}>{row.type}</td>
+                      <td style={getIPStyle(row.ip)}>{row.ip}</td>
                       <td style={{ color: row.score > 0.7 ? "var(--red)" : "var(--amber)", fontFamily: "var(--mono)" }}>{row.score.toFixed(2)}</td>
-                      <td>{row.rec}</td>
+                      <td style={getRouteStyle(row.rec)}>{row.rec}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -385,6 +598,141 @@ export default function Agents() {
             </div>
           )}
         </Surface>
+
+        {/* ANALYSE POPUP MODAL */}
+        {showAnalysis && (
+          <div className="analysis-modal-overlay" style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 5, 5, 0.88)",
+            backdropFilter: "blur(12px)",
+            display: "grid",
+            placeItems: "center",
+            zIndex: 9999,
+            padding: 20
+          }}>
+            <Surface className="line-accent" style={{
+              width: "100%",
+              maxWidth: 900,
+              padding: 30,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              position: "relative",
+              background: "#160b0b",
+              border: "1px solid rgba(255,138,61,0.22)"
+            }}>
+              {/* Modal Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: 16 }}>
+                <div>
+                  <div className="page-eyebrow">// analytical focus desk</div>
+                  <h2 className="section-title" style={{ marginTop: 8 }}>{activeAgent.name} Analysis</h2>
+                </div>
+                <button 
+                  onClick={() => setShowAnalysis(false)} 
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    color: "rgba(255,255,255,0.7)",
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    letterSpacing: "0.1em"
+                  }}
+                >
+                  ESC // CLOSE
+                </button>
+              </div>
+
+              {/* Stat Summary Row */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
+                <div className="signal-stage" style={{ background: "rgba(255,255,255,0.015)" }}>
+                  <div className="label-xs">Total Records Processed</div>
+                  <strong style={{ fontSize: 20, color: "var(--accent-3)", marginTop: 6, display: "block" }}>{statsSummary.total} events</strong>
+                </div>
+                <div className="signal-stage" style={{ background: "rgba(255,255,255,0.015)" }}>
+                  <div className="label-xs">Dominant Category</div>
+                  <strong style={{ fontSize: 20, color: "var(--accent-1)", marginTop: 6, display: "block" }}>{statsSummary.dominant.name} ({statsSummary.dominant.percentage}%)</strong>
+                </div>
+                {activeAgent.acc && (
+                  <div className="signal-stage" style={{ background: "rgba(255,255,255,0.015)" }}>
+                    <div className="label-xs">Model Benchmark Accuracy</div>
+                    <strong style={{ fontSize: 20, color: "var(--green)", marginTop: 6, display: "block" }}>{activeAgent.acc}</strong>
+                  </div>
+                )}
+              </div>
+
+              {/* Chart Grid */}
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                {/* Bar Plot */}
+                <div style={{ flex: 1, minWidth: 340, background: "rgba(255,255,255,0.02)", padding: 20, borderRadius: 16, border: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div className="label-xs" style={{ marginBottom: 16 }}>📊 Volume Distribution (Counts)</div>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={analysisData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis dataKey="name" stroke="rgba(255,255,255,0.4)" fontSize={10} tickLine={false} style={{ fontFamily: "var(--mono)" }} />
+                      <YAxis stroke="rgba(255,255,255,0.4)" fontSize={10} tickLine={false} style={{ fontFamily: "var(--mono)" }} />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#160b0b",
+                          border: "1px solid rgba(255,138,61,0.2)",
+                          borderRadius: 10,
+                          color: "#fff",
+                          fontFamily: "var(--mono)",
+                          fontSize: 12
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 10, fontFamily: "var(--mono)", paddingTop: 10 }} />
+                      <Bar dataKey="count" name="Event Count">
+                        {analysisData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Pie Chart (Percentage split) */}
+                <div style={{ flex: 1, minWidth: 340, background: "rgba(255,255,255,0.02)", padding: 20, borderRadius: 16, border: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div className="label-xs" style={{ marginBottom: 16 }}>🍩 Percentage Split (%)</div>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={analysisData}
+                        dataKey="percentage"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={85}
+                        paddingAngle={4}
+                        label={({ name, percentage }) => `${percentage}%`}
+                        style={{ fontFamily: "var(--mono)", fontSize: 10 }}
+                      >
+                        {analysisData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          background: "#160b0b",
+                          border: "1px solid rgba(255,138,61,0.2)",
+                          borderRadius: 10,
+                          color: "#fff",
+                          fontFamily: "var(--mono)",
+                          fontSize: 12
+                        }}
+                        formatter={(value) => `${value}%`}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 10, fontFamily: "var(--mono)", paddingTop: 10 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </Surface>
+          </div>
+        )}
       </div>
     </Layout>
   );

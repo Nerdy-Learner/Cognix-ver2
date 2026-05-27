@@ -1,8 +1,9 @@
 {
   "name": "cognix",
   "scripts": {
-    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "dev": "concurrently \"npm run backend\" \"npm run python-backend\" \"npm run frontend\"",
     "backend": "node cognix-backend/server.js",
+    "python-backend": "python -m uvicorn main:app --host 127.0.0.1 --port 8002 --app-dir cognix-backend",
     "frontend": "npm run dev --prefix cognix-frontend"
   },
   "dependencies": {

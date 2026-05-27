@@ -4,6 +4,7 @@ import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
 import { getRisk, getRiskStyles } from "../utils/risk";
 import { getFullIncidents } from "../services/api";
+import { getIPStyle, getAttackTypeStyle, getRouteStyle } from "../utils/colors";
 
 
 const severityOrder = { High: 0, Medium: 1, Low: 2 };
@@ -34,11 +35,12 @@ export default function Alerts() {
   const derived = useMemo(() => {
     const normalized = alerts
       .map((alert, index) => {
-        const rawRisk = alert.agent3?.risk_level || "Low";
-        const risk = rawRisk === "Critical" ? "High" : rawRisk;
+        const rawRisk = alert.agent3?.risk_level || alert.agent3?.decision || "Low";
+        const normalizedRisk = rawRisk.charAt(0).toUpperCase() + rawRisk.slice(1).toLowerCase();
+        const risk = normalizedRisk === "Critical" ? "High" : normalizedRisk;
         const source = alert.Source || alert.Host || alert.User || `sensor-${index + 1}`;
         const timestamp = alert.agent4?.processedAt || "Live now";
-        const route = alert.agent4?.decision || "Monitor";
+        const route = alert.agent4?.action || alert.agent4?.decision || "Monitor";
         return { ...alert, risk, source, timestamp, route };
       })
       .filter((alert) => {
@@ -142,16 +144,16 @@ export default function Alerts() {
               </thead>
               <tbody>
                 {derived.rows.map((alert, index) => (
-                  <tr key={alert._id || `${alert.agent1?.agent1_label}-${index}`}>
-                    <td style={{ color: "#fff" }}>{alert.agent1?.agent1_label || "Unknown alert"}</td>
+                  <tr key={alert._id || `${alert.agent1?.decision || alert.agent1?.agent1_label}-${index}`}>
+                    <td style={getAttackTypeStyle(alert.agent1?.decision || alert.agent1?.attack_type || alert.agent1?.agent1_label)}>{alert.agent1?.decision || alert.agent1?.attack_type || alert.agent1?.agent1_label || "Unknown alert"}</td>
                     <td>
                       <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${getRiskStyles(alert.risk)}`}>
                         {alert.risk}
                       </span>
                     </td>
-                    <td>{alert.source}</td>
+                    <td style={getIPStyle(alert.source)}>{alert.source}</td>
                     <td style={{ fontFamily: "var(--mono)", fontSize: 12 }}>{alert.timestamp}</td>
-                    <td>{alert.route}</td>
+                    <td style={getRouteStyle(alert.route)}>{alert.route}</td>
                   </tr>
                 ))}
               </tbody>

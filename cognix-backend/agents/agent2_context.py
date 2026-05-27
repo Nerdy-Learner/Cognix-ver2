@@ -1,157 +1,419 @@
-# from core.agent_base import BaseAgent
-
-# class Agent2(BaseAgent):
-#     def __init__(self):
-#         super().__init__("Agent2_Context")
-
-#     def run(self, alert, context):
-#         src_ip = alert.get("Source_IP", "")
-#         port = int(alert.get("Port", 0))
-#         protocol = str(alert.get("Protocol", "")).upper()
-
-#         reasons = []
-
-#         # Internal vs External
-#         is_internal = src_ip.startswith("192.168") or src_ip.startswith("10.")
-#         context["features"]["is_internal_ip"] = "Yes" if is_internal else "No"
-#         reasons.append("Internal IP" if is_internal else "External IP")
-
-#         dest_ip = alert.get("Destination_IP", "")
-
-#         # asset criticality
-#         if dest_ip.startswith("192.168.1") or dest_ip.startswith("10.0"):
-#             asset_value = "High"
-#         elif dest_ip.startswith("172.16"):
-#             asset_value = "Medium"
-#         else:
-#             asset_value = "Low"
-
-#         context["features"]["asset_value"] = asset_value
-
-#         # geo anomaly
-#         geo_anomaly = not is_internal
-#         context["features"]["geo_anomaly"] = "Yes" if geo_anomaly else "No"
-
-#         # Port category
-#         if port in [80, 443]:
-#             port_category = "Web"
-#         elif port == 22:
-#             port_category = "SSH"
-#         elif port == 25:
-#             port_category = "Email"
-#         else:
-#             port_category = "Other"
-
-#         context["features"]["port_category"] = port_category
-
-#         # Protocol risk
-#         if protocol in ["FTP", "TELNET"]:
-#             protocol_risk = "High"
-#         elif protocol == "UDP":
-#             protocol_risk = "Medium"
-#         elif protocol in ["HTTP", "HTTPS", "TCP"]:
-#             protocol_risk = "Low"
-#         else:
-#             protocol_risk = "Unknown"
-
-#         context["features"]["protocol_risk"] = protocol_risk
-
-#         decision = "Context Enriched"
-#         confidence = 0.8
-
-#         return self.format_output(
-#             decision,
-#             confidence,
-#             f"{'; '.join(reasons)}, Port: {port_category}, Protocol risk: {protocol_risk}"
-#         )
-
+import os
+import re
+import joblib
+import pandas as pd
 
 from core.agent_base import BaseAgent
-import requests
 
+
+# =========================
+# MODEL PATHS
+# =========================
+
+BASE_DIR = os.path.dirname(
+    os.path.dirname(__file__)
+)
+
+MODEL_DIR = os.path.join(
+    BASE_DIR,
+    "models"
+)
+
+
+# =========================
+# LOAD AGENT-2 MODELS
+# =========================
+
+agent2_model = joblib.load(
+    os.path.join(
+        MODEL_DIR,
+        "agent2_mitre_model.pkl"
+    )
+)
+
+agent2_tfidf = joblib.load(
+    os.path.join(
+        MODEL_DIR,
+        "agent2_tfidf.pkl"
+    )
+)
+
+agent2_encoder = joblib.load(
+    os.path.join(
+        MODEL_DIR,
+        "agent2_label_encoder.pkl"
+    )
+)
+
+
+# =========================
+# RULE ENGINE
+# =========================
+
+RULES = [
+
+    {
+        "name": "SQL Injection",
+
+        "pattern": r"(SELECT|UNION|INSERT|DROP|extractvalue|alert\()",
+
+        "tactic": "Credential Access",
+
+        "severity": "High",
+
+        "technique": "T1059"
+    },
+
+    {
+        "name": "Login Attempt",
+
+        "pattern": r"(wp-login\.php|POST.*login|failed)",
+
+        "tactic": "Credential Access",
+
+        "severity": "Medium",
+
+        "technique": "T1110"
+    },
+
+    {
+        "name": "Recon Scan",
+
+        "pattern": r"(xmlrpc|wlwmanifest|robots\.txt|sitemap)",
+
+        "tactic": "Reconnaissance",
+
+        "severity": "Low",
+
+        "technique": "T1595"
+    },
+
+    {
+        "name": "Service Abuse",
+
+        "pattern": r"(/lib/ajax/service.php)",
+
+        "tactic": "Impact",
+
+        "severity": "High",
+
+        "technique": "T1499"
+    }
+]
+
+
+# =========================
+# NORMALIZE ATTACK NAME
+# =========================
+
+def normalize_attack_name(name):
+
+    return (
+        str(name)
+        .replace("�", "-")
+        .replace("–", "-")
+        .strip()
+    )
+
+
+# =========================
+# APPLY RULE ENGINE
+# =========================
+
+def apply_rules(request):
+
+    for rule in RULES:
+
+        if re.search(
+            rule["pattern"],
+            request,
+            re.IGNORECASE
+        ):
+
+            return {
+
+                "tactic": rule["tactic"],
+
+                "technique": rule["technique"],
+
+                "severity": rule["severity"],
+
+                "matched_rule": rule["name"]
+            }
+
+    return None
+
+
+# =========================
+# ATTACK-TYPE → MITRE
+# =========================
+
+attack_to_mitre = {
+
+    "DDoS": "Impact",
+
+    "DoS Hulk": "Impact",
+
+    "DoS GoldenEye": "Impact",
+
+    "DoS Slowhttptest": "Impact",
+
+    "DoS slowloris": "Impact",
+
+    "PortScan": "Reconnaissance",
+
+    "Bot": "Command and Control",
+
+    "FTP-Patator": "Credential Access",
+
+    "SSH-Patator": "Credential Access",
+
+    "Web Attack - Brute Force":
+        "Credential Access",
+
+    "Web Attack - Sql Injection":
+        "Initial Access",
+
+    "Web Attack - XSS":
+        "Execution",
+
+    "Infiltration":
+        "Lateral Movement",
+
+    "Heartbleed":
+        "Credential Access"
+}
+
+
+# =========================
+# ATTACK-TYPE → TECHNIQUE
+# =========================
+
+attack_to_technique = {
+
+    "DDoS": "T1498",
+
+    "DoS Hulk": "T1499",
+
+    "DoS GoldenEye": "T1499",
+
+    "DoS Slowhttptest": "T1499",
+
+    "DoS slowloris": "T1499",
+
+    "PortScan": "T1595",
+
+    "Bot": "T1071",
+
+    "FTP-Patator": "T1110",
+
+    "SSH-Patator": "T1110",
+
+    "Web Attack - Brute Force":
+        "T1110",
+
+    "Web Attack - Sql Injection":
+        "T1190",
+
+    "Web Attack - XSS":
+        "T1059",
+
+    "Infiltration":
+        "T1021",
+
+    "Heartbleed":
+        "T1190"
+}
+
+
+# =========================
+# AGENT-2 CLASS
+# =========================
 
 class Agent2(BaseAgent):
 
     def __init__(self):
-        super().__init__("Agent2_Context")
+
+        super().__init__("Agent2")
 
 
     def run(self, alert, context):
 
-        src_ip = alert.get("Source_IP", "")
-        port = int(alert.get("Port", 0))
-        protocol = str(alert.get("Protocol", "")).upper()
+        # =========================
+        # GET AGENT1 OUTPUT
+        # =========================
 
-        reasons = []
+        attack_type = normalize_attack_name(
 
-        # Internal vs External
-        is_internal = src_ip.startswith("192.168") or src_ip.startswith("10.")
-        context["features"]["is_internal_ip"] = "Yes" if is_internal else "No"
-
-        reasons.append("Internal IP" if is_internal else "External IP")
-
-        dest_ip = alert.get("Destination_IP", "")
-
-        # Asset criticality
-        if dest_ip.startswith("192.168.1") or dest_ip.startswith("10.0"):
-            asset_value = "High"
-        elif dest_ip.startswith("172.16"):
-            asset_value = "Medium"
-        else:
-            asset_value = "Low"
-
-        context["features"]["asset_value"] = asset_value
-
-        # Geo anomaly
-        geo_anomaly = not is_internal
-        context["features"]["geo_anomaly"] = "Yes" if geo_anomaly else "No"
-
-        # Port category
-        if port in [80, 443]:
-            port_category = "Web"
-        elif port == 22:
-            port_category = "SSH"
-        elif port == 25:
-            port_category = "Email"
-        else:
-            port_category = "Other"
-
-        context["features"]["port_category"] = port_category
-
-        # Protocol risk
-        if protocol in ["FTP", "TELNET"]:
-            protocol_risk = "High"
-        elif protocol == "UDP":
-            protocol_risk = "Medium"
-        elif protocol in ["HTTP", "HTTPS", "TCP"]:
-            protocol_risk = "Low"
-        else:
-            protocol_risk = "Unknown"
-
-        context["features"]["protocol_risk"] = protocol_risk
-
-        decision = "Context Enriched"
-        confidence = 0.8
-
-
-        # 🔹 Store Agent2 output in MongoDB
-        try:
-            requests.post(
-                "http://localhost:5000/api/agent2",
-                json={
-                    "alert_id": alert.get("_id", None),
-                    "alert": alert,
-                    "features": context["features"],
-                    "decision": decision,
-                    "confidence": confidence
-                }
+            context["features"].get(
+                "attack_type",
+                "BENIGN"
             )
-        except Exception as e:
-            print("Agent2 DB store failed:", e)
+        )
 
+        confidence = context["features"].get(
+            "agent1_confidence",
+            0
+        )
+
+        request = str(
+            alert.get(
+                "request",
+                "GET / HTTP/1.1"
+            )
+        )
+
+
+        # =========================
+        # DEFAULT ENRICHMENT
+        # =========================
+
+        enrichment = {
+
+            "tactic": None,
+
+            "technique": None,
+
+            "severity": "Low",
+
+            "matched_rule": None
+        }
+
+
+        # =========================
+        # BENIGN BYPASS
+        # =========================
+
+        if attack_type == "BENIGN":
+
+            enrichment["tactic"] = "non-attack"
+
+            enrichment["technique"] = None
+
+            enrichment["matched_rule"] = (
+                "benign traffic"
+            )
+
+
+        else:
+
+            # =========================
+            # PRIMARY ATTACK MAPPING
+            # =========================
+
+            enrichment["tactic"] = (
+                attack_to_mitre.get(
+                    attack_type
+                )
+            )
+
+            enrichment["technique"] = (
+                attack_to_technique.get(
+                    attack_type
+                )
+            )
+
+            enrichment["matched_rule"] = (
+                f"{attack_type} heuristic mapping"
+            )
+
+
+            # =========================
+            # RULE ENGINE FALLBACK
+            # =========================
+
+            if enrichment["tactic"] is None:
+
+                rule_result = apply_rules(
+                    request
+                )
+
+                if rule_result is not None:
+
+                    enrichment.update(
+                        rule_result
+                    )
+
+
+            # =========================
+            # ML FALLBACK
+            # =========================
+
+            if enrichment["tactic"] is None:
+
+                vec = agent2_tfidf.transform(
+                    [request]
+                )
+
+                pred = agent2_model.predict(
+                    vec
+                )
+
+                tactic = (
+                    agent2_encoder
+                    .inverse_transform(pred)[0]
+                )
+
+                enrichment["tactic"] = tactic
+
+                enrichment["matched_rule"] = (
+                    "ml prediction"
+                )
+
+
+            # =========================
+            # FINAL FALLBACK
+            # =========================
+
+            if enrichment["tactic"] is None:
+
+                enrichment["tactic"] = "Unknown"
+
+
+        # =========================
+        # TECHNIQUE FALLBACK
+        # =========================
+
+        if enrichment["technique"] is None:
+
+            enrichment["technique"] = (
+                attack_to_technique.get(
+                    attack_type
+                )
+            )
+
+
+        # =========================
+        # UPDATE CONTEXT
+        # =========================
+
+        context["features"].update({
+
+            "mitre_tactic":
+                enrichment["tactic"],
+
+            "mitre_technique":
+                enrichment["technique"],
+
+            "agent2_severity":
+                enrichment["severity"],
+
+            "matched_rule":
+                enrichment["matched_rule"]
+        })
+
+
+        # =========================
+        # RETURN OUTPUT
+        # =========================
 
         return self.format_output(
-            decision,
-            confidence,
-            f"{'; '.join(reasons)}, Port: {port_category}, Protocol risk: {protocol_risk}"
+
+            decision=enrichment["tactic"],
+
+            confidence=confidence,
+
+            reason=(
+                enrichment["matched_rule"]
+            )
         )

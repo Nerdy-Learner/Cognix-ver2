@@ -4,6 +4,7 @@ import { ArrowRight, Upload } from "lucide-react";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
 import { getFullIncidents } from "../services/api";
+import { getIPStyle, getAttackTypeStyle, getRouteStyle } from "../utils/colors";
 
 // const incidents = [
 //   { id: "INC-447", type: "Brute force burst", risk: "High", ip: "185.220.101.47", status: "Investigating" },
@@ -44,16 +45,18 @@ const statusBadge = (status) => {
     Queued: "badge-dim",
   };
 
+  const normalized = status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "Queued";
   return (
-    <span className={`badge ${map[status] || "badge-dim"}`}>
-      {status.toUpperCase()}
+    <span className={`badge ${map[normalized] || "badge-dim"}`}>
+      {normalized.toUpperCase()}
     </span>
   );
 };
 
 const riskBadge = (risk) => {
   const map = { High: "badge-red", Medium: "badge-amber", Low: "badge-green" };
-  return <span className={`badge ${map[risk] || "badge-dim"}`}>{risk.toUpperCase()}</span>;
+  const normalized = risk ? risk.charAt(0).toUpperCase() + risk.slice(1).toLowerCase() : "Low";
+  return <span className={`badge ${map[normalized] || "badge-dim"}`}>{normalized.toUpperCase()}</span>;
 };
 
 export default function Dashboard() {
@@ -77,38 +80,52 @@ export default function Dashboard() {
 
         const data = res.data;
 
-        const formatted = data.slice(0, 6).map((incident, index) => ({
-          id: incident._id.slice(-6).toUpperCase(),
-          type:
-            incident.agent1?.agent1_label ||
-            incident.Scan_Type ||
-            "Unknown",
-          risk:
-            incident.agent3?.risk_level ||
-            "Low",
-          ip:
-            incident.Source_IP ||
-            "—",
-          status:
-            incident.agent4?.decision === "Escalate"
-              ? "Investigating"
-              : incident.agent4?.decision === "Auto-Close"
-                ? "Contained"
-                : incident.agent4?.decision === "Monitor"
-                  ? "Monitoring"
-                  : "Queued",
-        }));
+        const formatted = data.slice(0, 6).map((incident, index) => {
+          const decision = incident.agent4?.decision?.toUpperCase();
+          let status = "Queued";
+          if (["ESCALATE", "ESCALATED", "BLOCK", "BLOCKED"].includes(decision)) {
+            status = "Investigating";
+          } else if (["AUTO-CLOSE", "CONTAINED"].includes(decision)) {
+            status = "Contained";
+          } else if (["MONITOR", "MONITORING", "ALERT"].includes(decision)) {
+            status = "Monitoring";
+          }
+
+          const rawRisk = incident.agent3?.risk_level || incident.agent3?.decision || "Low";
+          const risk = rawRisk.charAt(0).toUpperCase() + rawRisk.slice(1).toLowerCase();
+
+          return {
+            id: incident._id ? incident._id.slice(-6).toUpperCase() : `INC-${index}`,
+            type:
+              incident.agent1?.decision ||
+              incident.agent1?.metadata?.attack_type ||
+              incident.agent1?.attack_type ||
+              incident.agent1?.agent1_label ||
+              incident.Scan_Type ||
+              "Unknown",
+            risk,
+            ip:
+              incident.Source_IP ||
+              incident.Source ||
+              "—",
+            status,
+          };
+        });
 
         setIncidents(formatted);
 
         const highSeverity = data.filter(
-          i =>
-            i.agent3?.risk_level === "High" ||
-            i.agent3?.risk_level === "Critical"
+          i => {
+            const r = (i.agent3?.risk_level || i.agent3?.decision || "").toUpperCase();
+            return r === "HIGH" || r === "CRITICAL";
+          }
         ).length;
 
         const queuedActions = data.filter(
-          i => i.agent4?.decision === "Monitor"
+          i => {
+            const d = (i.agent4?.decision || "").toUpperCase();
+            return ["MONITOR", "MONITORING", "ALERT"].includes(d);
+          }
         ).length;
 
         setPriorityStats([
@@ -221,10 +238,10 @@ export default function Dashboard() {
                     {incidents.map((incident) => (
                       <tr key={incident.id}>
                         <td style={{ color: "var(--accent-3)", fontWeight: 700 }}>{incident.id}</td>
-                        <td style={{ color: "#fff" }}>{incident.type}</td>
+                        <td style={getAttackTypeStyle(incident.type)}>{incident.type}</td>
                         <td>{riskBadge(incident.risk)}</td>
-                        <td style={{ fontFamily: "var(--mono)", fontSize: 12 }}>{incident.ip}</td>
-                        <td>{statusBadge(incident.status)}</td>
+                        <td style={getIPStyle(incident.ip)}>{incident.ip}</td>
+                        <td style={getRouteStyle(incident.status)}>{statusBadge(incident.status)}</td>
                       </tr>
                     ))}
                   </tbody>

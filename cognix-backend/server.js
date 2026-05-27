@@ -7,6 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { sendOtpMail } from "./utils/sendOtpMail.js";
+import axios from "axios";
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -67,7 +68,7 @@ app.use(
         credentials: true,
     })
 );
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 
 /* ---------------- HEALTH CHECK (Render pings this) ---------------- */
 
@@ -180,175 +181,205 @@ async function runAgentsPipeline() {
             if (incident.processed) continue;
 
             // Agent 1 output
+            // =========================
+            // REAL FASTAPI AGENT-1
+            // =========================
+
+            const fastapiResponse = await axios.post(
+                "http://localhost:8002/analyze",
+                {
+                    alert: incident
+                }
+            );
+
+            const pipeline = fastapiResponse.data;
+
+            const fastapiAgent1 = pipeline.agent_outputs[0];
+
+            const parsedType =
+                pipeline.features?.attack_type || "BENIGN";
+
             await Agent1Output.create({
+
                 incidentId: incident._id,
 
-                Source_IP: incident.Source_IP || null,
-                Destination_IP: incident.Destination_IP || null,
-                Port: incident.Port || null,
-                Request_Type: incident.Request_Type || null,
-                Protocol: incident.Protocol || null,
-                Payload_Size: incident.Payload_Size || null,
-                User_Agent: incident.User_Agent || null,
-                Status: incident.Status || null,
-                Intrusion: incident.Intrusion || null,
-                Scan_Type: incident.Scan_Type || null,
+                agent: fastapiAgent1.agent,
 
-                agent1_label:
-                    incident.Scan_Type === "Normal"
-                        ? "Normal Traffic"
-                        : incident.Scan_Type === "BotAttack"
-                            ? "Bot Activity"
-                            : incident.Scan_Type === "Recon"
-                                ? "Recon Activity"
-                                : incident.Scan_Type === "Intrusion"
-                                    ? "Intrusion Attempt"
-                                    : incident.Scan_Type === "BruteForce"
-                                        ? "Brute Force Attack"
-                                        : incident.Scan_Type === "PortScan"
-                                            ? "Port Scan"
-                                            : "Unknown Activity",
+                decision: fastapiAgent1.decision,
+
+                confidence: fastapiAgent1.confidence,
+
+                metadata: {
+                    attack_type: parsedType
+                },
+
                 processedAt: new Date()
             });
 
-            console.log("Agent-1 done");
+            console.log("REAL Agent-1 done");
 
 
             // // Agent 2 output
+            // =========================
+            // REAL FASTAPI AGENT-2
+            // =========================
+
+            const fastapiAgent2 =
+                pipeline.agent_outputs[1];
+
+            const mitreFeatures =
+                pipeline.features || {};
+
             await Agent2Output.create({
+
                 incidentId: incident._id,
 
-                Source_IP: incident.Source_IP,
-                Destination_IP: incident.Destination_IP,
-                Protocol: incident.Protocol,
-                Scan_Type: incident.Scan_Type,
+                agent: fastapiAgent2.agent,
 
-                is_internal_ip:
-                    (incident.Source_IP || "").startsWith("192.168") ||
-                        (incident.Source_IP || "").startsWith("10.")
-                        ? "Yes"
-                        : "No",
+                decision: fastapiAgent2.decision,
 
-                port_category:
-                    incident.Port === "80" || incident.Port === "443"
-                        ? "Web"
-                        : incident.Port === "25"
-                            ? "Email"
-                            : incident.Port === "22"
-                                ? "SSH"
-                                : incident.Port === "3389"
-                                    ? "RDP"
-                                    : incident.Port === "53"
-                                        ? "DNS"
-                                        : "Other",
+                confidence: fastapiAgent2.confidence,
 
-                protocol_risk:
-                    incident.Protocol === "FTP" ||
-                        incident.Protocol === "Telnet"
-                        ? "High"
-                        : incident.Protocol === "UDP"
-                            ? "Medium"
-                            : ["HTTP", "HTTPS", "TCP"].includes(incident.Protocol)
-                                ? "Low"
-                                : "Unknown",
+                metadata: {
 
-                asset_value:
-                    (incident.Destination_IP || "").startsWith("192.168.1") ||
-                        (incident.Destination_IP || "").startsWith("10.0")
-                        ? "High"
-                        : (incident.Destination_IP || "").startsWith("172.16")
-                            ? "Medium"
-                            : "Low",
+                    mitre_tactic:
+                        mitreFeatures.mitre_tactic,
 
-                geo_anomaly:
-                    !(incident.Source_IP || "").startsWith("192.168"),
+                    mitre_technique:
+                        mitreFeatures.mitre_technique,
+
+                    severity:
+                        mitreFeatures.agent2_severity,
+
+                    category:
+                        mitreFeatures.matched_rule,
+
+                    priority:
+                        fastapiAgent2.reason,
+
+                    is_internal_ip:
+                        "Unknown",
+
+                    port_category:
+                        "Unknown",
+
+                    protocol_risk:
+                        "Unknown",
+
+                    asset_value:
+                        "Unknown",
+
+                    geo_anomaly:
+                        false
+                },
 
                 processedAt: new Date()
             });
+
+            console.log("REAL Agent-2 done");
 
             // // Agent 3 output
-            // // fetch Agent-2 output for this incident
-            const agent2 = await Agent2Output.findOne({
-                incidentId: incident._id
-            });
+            // =========================
+            // REAL FASTAPI AGENT-3
+            // =========================
 
-            let risk_level = "Low";
+            const fastapiAgent3 =
+                pipeline.agent_outputs[2];
 
-            if (incident.Intrusion === "1") {
-                risk_level = "Critical";
-            }
-            else if (incident.Scan_Type !== "Normal") {
-                risk_level = "High";
-            }
-            else if (agent2?.geo_anomaly === true) {
-                risk_level = "Medium";
-            }
+            const riskFeatures =
+                pipeline.features || {};
 
             await Agent3Output.create({
+
                 incidentId: incident._id,
-                asset_value: agent2?.asset_value || "Unknown",
-                geo_anomaly: agent2?.geo_anomaly || false,
-                risk_level: risk_level,
+
+                agent: fastapiAgent3.agent,
+
+                decision: fastapiAgent3.decision,
+
+                confidence: fastapiAgent3.confidence,
+
+                metadata: {
+
+                    user:
+                        incident.src_user ||
+                        "Administrator",
+
+                    risk_score:
+                        riskFeatures.risk_score || 0,
+
+                    risk_level:
+                        riskFeatures.risk_level || "LOW",
+
+                    behavioral_score:
+                        riskFeatures.risk_score || 0,
+
+                    attack_type:
+                        parsedType,
+
+                    severity:
+                        riskFeatures.agent2_severity
+                        || "Low",
+
+                    user_behavior:
+                        riskFeatures.risk_level === "HIGH"
+                            ? "Anomalous"
+                            : "Normal",
+
+                    reason:
+                        fastapiAgent3.reason
+                },
+
                 processedAt: new Date()
             });
 
-            // Agent 4 output
-            // fetch Agent-2 output
+            console.log("REAL Agent-3 done");
 
-            // fetch Agent - 1 output
-            const agent1 = await Agent1Output.findOne({
-                incidentId: incident._id
-            });
+            // =========================
+            // REAL FASTAPI AGENT-4
+            // =========================
 
-            // prepare model features
-            const features = {
-                Alert_Type: agent1?.agent1_label || "Unknown",
-                is_internal_ip: agent2?.is_internal_ip || "Yes",
-                port_category: agent2?.port_category || "Other",
-                protocol_risk: agent2?.protocol_risk || "Low",
-                asset_value: agent2?.asset_value || "Low",
-                geo_anomaly: agent2?.geo_anomaly ? "Yes" : "No"
-            };
+            const fastapiAgent4 =
+                pipeline.agent_outputs[3];
 
-            // Agent4 prediction — pure JS rule-based classifier
-            // (replaces PythonShell dependency for deployment compatibility)
-            let prediction = 0;
-            let confidence = 0;
-
-            try {
-                const result = predictAgent4JS(features, risk_level);
-                prediction = result.prediction;
-                confidence = result.confidence;
-
-                console.log("Agent4 prediction:", prediction);
-                console.log("Agent4 confidence:", confidence);
-            } catch (err) {
-                console.log("Agent4 fallback triggered:", err.message);
-            }
-
-            // map prediction → decision
-            let decision = "Auto-Close";
-            let reason = "Low-risk activity";
-
-            if (prediction === 1) {
-                decision = "Escalate";
-                reason = "High-risk activity detected by ML model";
-            }
+            const finalFeatures =
+                pipeline.features || {};
 
             await Agent4Output.create({
+
                 incidentId: incident._id,
-                prediction,
-                confidence,
-                decision,
-                reason,
+
+                agent: fastapiAgent4.agent,
+
+                decision: fastapiAgent4.decision,
+
+                confidence: fastapiAgent4.confidence,
+
+                metadata: {
+
+                    action:
+                        finalFeatures.soc_action,
+
+                    priority:
+                        finalFeatures.soc_priority,
+
+                    risk_level:
+                        finalFeatures.risk_level,
+
+                    risk_score:
+                        finalFeatures.risk_score,
+
+                    recommended_response:
+                        fastapiAgent4.reason,
+
+                    soc_action:
+                        finalFeatures.soc_action
+                },
+
                 processedAt: new Date()
             });
 
-            // mark incident processed
-            await Incident.findByIdAndUpdate(
-                incident._id,
-                { processed: true }
-            );
+            console.log("REAL Agent-4 done");
         }
 
         console.log("Pipeline completed successfully");
@@ -366,12 +397,19 @@ app.post("/api/incidents", async (req, res) => {
     try {
         const { data } = req.body;
 
-        // const inserted = await Incident.insertMany(data);
+        if (!data || !Array.isArray(data)) {
+            return res.status(400).json({ message: "Invalid data format" });
+        }
 
-        // remove duplicates before insertion
         const newRecords = [];
 
         for (const row of data) {
+            // Prevent Mongoose from dropping undefined fields and matching the first DB document
+            if (!row.Source_IP || !row.Destination_IP) {
+                newRecords.push(row);
+                continue;
+            }
+
             const exists = await Incident.findOne({
                 Source_IP: row.Source_IP,
                 Destination_IP: row.Destination_IP,
@@ -385,19 +423,20 @@ app.post("/api/incidents", async (req, res) => {
             }
         }
 
-        // insert only unique records
-        const inserted = await Incident.insertMany(newRecords);
+        // Only insert if there are unique records to add
+        if (newRecords.length > 0) {
+            await Incident.insertMany(newRecords);
+        }
 
-        // automatically run agents pipeline in background
-        runAgentsPipeline();
+        runAgentsPipeline(); // Uncomment if you want the pipeline to run immediately after upload
 
         res.json({
             message: "Incidents saved successfully",
-            count: inserted.length,
+            count: newRecords.length,
         });
 
     } catch (err) {
-        console.error(err);
+        console.error("Error storing incidents:", err);
         res.status(500).json({ message: "Server error" });
     }
 });
@@ -405,7 +444,9 @@ app.post("/api/incidents", async (req, res) => {
 // Get all incidents
 app.get("/api/incidents", async (req, res) => {
     try {
-        const incidents = await Incident.find();
+        const incidents = await Incident.find({
+            processed: false
+        });
 
         res.json(incidents);
 

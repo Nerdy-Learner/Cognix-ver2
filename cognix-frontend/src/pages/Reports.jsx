@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Download, FileText, Filter } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 import Layout from "../components/layout/Layout";
 import { SectionHeading, Surface } from "../components/ui/AppFrame";
 import { getFullIncidents } from "../services/api";
@@ -47,7 +47,7 @@ export default function Reports() {
         const labelCounts = {};
 
         data.forEach((incident) => {
-          const label = incident.agent1?.agent1_label || "Unknown";
+          const label = incident.agent1?.decision || incident.agent1?.attack_type || incident.agent1?.agent1_label || "Unknown";
 
           if (!labelCounts[label]) {
             labelCounts[label] = 0;
@@ -75,7 +75,7 @@ export default function Reports() {
         ).length;
 
         const summaries = data.filter(
-          (incident) => incident.agent4?.decision
+          (incident) => incident.agent4?.action || incident.agent4?.decision
         ).length;
 
         const processed = data.filter(
@@ -241,6 +241,7 @@ export default function Reports() {
                   <Pie data={typeData} cx="50%" cy="50%" innerRadius={80} outerRadius={108} paddingAngle={4} dataKey="value" stroke="none">
                     {typeData.map((entry, index) => <Cell key={entry.name} fill={colors[index % colors.length]} />)}
                   </Pie>
+                  <Legend wrapperStyle={{ fontSize: 10, fontFamily: "var(--mono)", paddingTop: 10 }} />
                 </PieChart>
               </ResponsiveContainer>
               <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
