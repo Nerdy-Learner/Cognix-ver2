@@ -35,6 +35,7 @@ loadDotEnv();
 const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/cognix";
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 const port = Number(process.env.PORT || 3001);
+const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8002";
 
 
 
@@ -186,7 +187,7 @@ async function runAgentsPipeline() {
             // =========================
 
             const fastapiResponse = await axios.post(
-                "http://localhost:8002/analyze",
+                `${pythonBackendUrl}/analyze`,
                 {
                     alert: incident
                 }

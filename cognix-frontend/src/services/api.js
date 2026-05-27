@@ -69,4 +69,4 @@ export const getReports = () => API.get("/reports");
 
 // trigger FastAPI orchestration
 export const runPipeline = () =>
-    axios.post("http://localhost:8002/analyze-all");
+    axios.post(`${import.meta.env.VITE_PYTHON_API_BASE_URL || "http://localhost:8002"}/analyze-all`);
